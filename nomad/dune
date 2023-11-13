@@ -1,0 +1,4 @@
+(library
+ (public_name nomad)
+ (name nomad)
+ (libraries caravan riot telemetry bitstring http))
