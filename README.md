@@ -1,6 +1,6 @@
 # nomad
 
-Nomad is an HTTP/HTTPS server for Trail apps.
+Nomad is an HTTP server for Riot apps.
 
 ## Getting Started
 

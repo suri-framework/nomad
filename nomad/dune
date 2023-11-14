@@ -1,4 +1,6 @@
 (library
  (public_name nomad)
  (name nomad)
+ (preprocess
+  (pps ppx_bitstring))
  (libraries caravan riot telemetry bitstring http))
