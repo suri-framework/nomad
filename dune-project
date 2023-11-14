@@ -23,7 +23,7 @@
    riot
    telemetry
    caravan
-   (http (>= "6.0.0"))
+   (http (>= "6.0.0~alpha2"))
    (bitstring (>= "4.1.0"))
    (ppx_bitstring (>= "4.1.0"))
    )

@@ -53,14 +53,13 @@ module Http1 = struct
     | {| _ |} -> parse_headers rest acc
 
   and parse_header data =
+    let clean s =
+      String.(s |> Bitstring.string_of_bitstring |> lowercase_ascii |> trim)
+    in
     let h, rest = until ":" data in
     let v, rest = until "\n" rest in
-    let h =
-      Bitstring.string_of_bitstring h |> String.lowercase_ascii |> String.trim
-    in
-    let v =
-      Bitstring.string_of_bitstring v |> String.lowercase_ascii |> String.trim
-    in
+    let h = clean h in
+    let v = clean v in
     ((h, v), rest)
 
   let to_string (res : Http.Response.t) body =
