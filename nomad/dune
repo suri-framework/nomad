@@ -3,4 +3,4 @@
  (name nomad)
  (preprocess
   (pps ppx_bitstring))
- (libraries caravan riot telemetry bitstring http))
+ (libraries atacama riot telemetry bitstring http))

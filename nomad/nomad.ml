@@ -72,13 +72,13 @@ module Http1 = struct
     Bigstringaf.of_string ~off:0 ~len:(Buffer.length buf) (Buffer.contents buf)
 end
 
-module Caravan_handler = struct
-  open Caravan.Handler
-  include Caravan.Handler.Default
+module Atacama_handler = struct
+  open Atacama.Handler
+  include Atacama.Handler.Default
 
   type state = {
     buffer : Bigstringaf.t;
-    handler : Caravan.Socket.t -> Http.Request.t -> unit;
+    handler : Atacama.Socket.t -> Http.Request.t -> unit;
   }
 
   let join_bigstring a b =

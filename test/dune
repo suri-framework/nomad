@@ -2,4 +2,4 @@
  (names nomad_test)
  (preprocess
   (pps ppx_bitstring))
- (libraries nomad caravan riot))
+ (libraries nomad atacama riot))

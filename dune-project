@@ -20,9 +20,9 @@
  (depends 
    (ocaml (>= "5.0.0"))
    dune
-   riot
-   telemetry
-   caravan
+   (riot (>= "0.0.1"))
+   (telemetry (>= "0.0.1"))
+   (atacama (>= "0.0.1"))
    (http (>= "6.0.0~alpha2"))
    (bitstring (>= "4.1.0"))
    (ppx_bitstring (>= "4.1.0"))
