@@ -1,3 +1,5 @@
+open Riot
+
 module Telemetry_ = struct
   type Telemetry.event += Request_received of { req : Http.Request.t }
     [@@unboxed]
@@ -76,23 +78,40 @@ module Atacama_handler = struct
   open Atacama.Handler
   include Atacama.Handler.Default
 
+  let http1 () = Angstrom.Buffered.parse Httpaf.Httpaf_private.Parse.request;
+
   type state = {
-    buffer : Bigstringaf.t;
+    parser : Httpaf.Request.t Angstrom.Buffered.state;
     handler : Atacama.Socket.t -> Http.Request.t -> unit;
   }
 
-  let join_bigstring a b =
-    let a_len = Bigstringaf.length a in
-    let b_len = Bigstringaf.length b in
-    let buffer = Bigstringaf.create (a_len + b_len) in
-    Bigstringaf.blit buffer ~src_off:0 a ~dst_off:0 ~len:a_len;
-    Bigstringaf.blit buffer ~src_off:a_len b ~dst_off:0 ~len:b_len;
-    buffer
+  let run_handler conn state req =
+    let Httpaf.Request.{ meth; target; version; headers } = req in
+    let version =
+      version |> Httpaf.Version.to_string |> Http.Version.of_string
+    in
+    let headers = headers |> Httpaf.Headers.to_list |> Http.Header.of_list in
+    let req =
+      Http.Request.make ~meth:(meth :> Http.Method.t) ~version ~headers target
+    in
+    state.handler conn req
 
   let handle_data data conn state =
-    match Http1.parse data with
-    | `more -> Continue { state with buffer = join_bigstring state.buffer data }
-    | `ok req ->
-        state.handler conn req;
+    Logger.debug (fun f -> f "Parsing data %S" (Bigstringaf.to_string data));
+    match state.parser with
+    | Angstrom.Buffered.Partial partial -> (
+        Logger.debug (fun f -> f "partial");
+        let parser = partial (`Bigstring data) in
+        match parser with
+        | Angstrom.Buffered.Done (_, req) ->
+            run_handler conn state req;
+            Close state
+        | _ ->
+            Logger.debug (fun f -> f "continue");
+            Continue { state with parser })
+    | Angstrom.Buffered.Done (_, req) ->
+        Logger.debug (fun f -> f "done");
+        run_handler conn state req;
         Close state
+    | Angstrom.Buffered.Fail _ -> Close state
 end

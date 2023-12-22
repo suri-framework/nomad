@@ -18,8 +18,8 @@
  (synopsis "A short synopsis")
  (description "A longer description")
  (depends 
-   (ocaml (>= "5.0.0"))
-   dune
+   (ocaml (>= "5.1.0"))
+   (httpaf (>= "0.7.1"))
    (riot (>= "0.0.1"))
    (telemetry (>= "0.0.1"))
    (atacama (>= "0.0.1"))
@@ -29,5 +29,3 @@
    )
  (tags
   (riot http server)))
-
-; See the complete stanza docs at https://dune.readthedocs.io/en/stable/dune-files.html#dune-project
