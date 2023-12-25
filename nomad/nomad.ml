@@ -19,7 +19,7 @@ module Http1 = struct
     (captured, rest)
 
   let rec parse data =
-    let data = Bigstringaf.to_string data |> Bitstring.bitstring_of_string in
+    let data = IO.Buffer.to_string data |> Bitstring.bitstring_of_string in
     match do_parse data with exception _ -> `more | req -> `ok req
 
   and do_parse data =
@@ -71,14 +71,14 @@ module Http1 = struct
       Http.Status.pp res.status
       (Http.Header.to_string res.headers)
       body;
-    Bigstringaf.of_string ~off:0 ~len:(Buffer.length buf) (Buffer.contents buf)
+    IO.Buffer.of_string (Buffer.contents buf)
 end
 
 module Atacama_handler = struct
   open Atacama.Handler
   include Atacama.Handler.Default
 
-  let http1 () = Angstrom.Buffered.parse Httpaf.Httpaf_private.Parse.request;
+  let http1 () = Angstrom.Buffered.parse Httpaf.Httpaf_private.Parse.request
 
   type state = {
     parser : Httpaf.Request.t Angstrom.Buffered.state;
@@ -97,11 +97,12 @@ module Atacama_handler = struct
     state.handler conn req
 
   let handle_data data conn state =
-    Logger.debug (fun f -> f "Parsing data %S" (Bigstringaf.to_string data));
+    Logger.debug (fun f -> f "Parsing data %S" (IO.Buffer.to_string data));
     match state.parser with
     | Angstrom.Buffered.Partial partial -> (
         Logger.debug (fun f -> f "partial");
-        let parser = partial (`Bigstring data) in
+        let cs = IO.Buffer.as_cstruct data in
+        let parser = partial (`Bigstring (Cstruct.to_bigarray cs)) in
         match parser with
         | Angstrom.Buffered.Done (_, req) ->
             run_handler conn state req;
@@ -114,4 +115,8 @@ module Atacama_handler = struct
         run_handler conn state req;
         Close state
     | Angstrom.Buffered.Fail _ -> Close state
+
+  let handle_close _conn _state =
+    Logger.debug (fun f -> f "closing connection");
+    ()
 end

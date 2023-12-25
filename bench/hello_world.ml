@@ -6,7 +6,7 @@ module Test : Application.Intf = struct
   let name = "test"
 
   let start () =
-    Logger.set_log_level (Some Info);
+    Logger.set_log_level (Some Error);
     sleep 0.1;
     Logger.info (fun f -> f "starting nomad server");
 

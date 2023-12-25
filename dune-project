@@ -20,9 +20,9 @@
  (depends 
    (ocaml (>= "5.1.0"))
    (httpaf (>= "0.7.1"))
-   (riot (>= "0.0.1"))
+   (riot (>= "0.0.7"))
    (telemetry (>= "0.0.1"))
-   (atacama (>= "0.0.1"))
+   (atacama (>= "0.0.4"))
    (http (>= "6.0.0~alpha2"))
    (bitstring (>= "4.1.0"))
    (ppx_bitstring (>= "4.1.0"))
