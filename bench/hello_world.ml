@@ -6,7 +6,7 @@ module Test : Application.Intf = struct
   let name = "test"
 
   let start () =
-    Logger.set_log_level (Some Error);
+    Logger.set_log_level (Some Info);
     sleep 0.1;
     Logger.info (fun f -> f "starting nomad server");
 
@@ -25,12 +25,13 @@ module Test : Application.Intf = struct
       let res = Http.Response.make ~version:req.version ~status ~headers () in
       let res = Nomad.Http1.to_string res body in
       Logger.debug (fun f -> f "res:\n%s" (IO.Buffer.to_string res));
-      let bytes = Atacama.Socket.send conn res |> Result.get_ok in
+      let bytes = Atacama.Connection.send conn res |> Result.get_ok in
       Logger.debug (fun f -> f "wrote %d bytes" bytes);
       ()
     in
 
     Atacama.start_link ~port:2112
+
       (module Nomad.Atacama_handler)
       { parser = Nomad.Atacama_handler.http1 (); handler }
 end

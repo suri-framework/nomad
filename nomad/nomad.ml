@@ -82,7 +82,7 @@ module Atacama_handler = struct
 
   type state = {
     parser : Httpaf.Request.t Angstrom.Buffered.state;
-    handler : Atacama.Socket.t -> Http.Request.t -> unit;
+    handler : Atacama.Connection.t -> Http.Request.t -> unit;
   }
 
   let run_handler conn state req =
