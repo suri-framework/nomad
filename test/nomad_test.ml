@@ -23,16 +23,14 @@ module Test : Application.Intf = struct
       in
 
       let res = Http.Response.make ~version:req.version ~status ~headers () in
-      let res = Nomad.Http1.to_string res body in
+      let res = Nomad.Http1.to_string res in
       Logger.debug (fun f -> f "res:\n%s" (IO.Buffer.to_string res));
       let bytes = Atacama.Connection.send conn res |> Result.get_ok in
       Logger.debug (fun f -> f "wrote %d bytes" bytes);
-      ()
+      conn
     in
 
-    Atacama.start_link ~port:2112
-      (module Nomad.Atacama_handler)
-      { parser = Nomad.Atacama_handler.http1 (); handler }
+    Nomad.start_link ~port:2112 ~handler ()
 end
 
 let () = Riot.start ~apps:[ (module Logger); (module Test) ] ()
