@@ -10,14 +10,17 @@ homepage: "https://github.com/leostera/nomad"
 bug-reports: "https://github.com/leostera/nomad/issues"
 depends: [
   "dune" {>= "3.10"}
-  "ocaml" {>= "5.1.0"}
+  "atacama" {>= "0.0.4"}
+  "trail" {>= "0.0.1"}
+  "bitstring" {>= "4.1.0"}
+  "h2" {>= "0.11.0"}
+  "http" {>= "6.0.0~alpha2"}
   "httpaf" {>= "0.7.1"}
+  "ocaml" {>= "5.1.0"}
+  "ppx_bitstring" {>= "4.1.0"}
   "riot" {>= "0.0.7"}
   "telemetry" {>= "0.0.1"}
-  "atacama" {>= "0.0.4"}
-  "http" {>= "6.0.0~alpha2"}
-  "bitstring" {>= "4.1.0"}
-  "ppx_bitstring" {>= "4.1.0"}
+  "websocketaf" {>= "6.0.0~alpha2"}
   "odoc" {with-doc}
 ]
 build: [

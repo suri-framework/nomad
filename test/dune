@@ -1,5 +1,9 @@
-(tests
- (names nomad_test)
- (preprocess
-  (pps ppx_bitstring))
+(test
+ (name nomad_test)
+ (modules nomad_test)
+ (libraries nomad atacama riot))
+
+(test
+ (name ws_test)
+ (modules ws_test)
  (libraries nomad atacama riot))

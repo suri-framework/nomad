@@ -3,4 +3,4 @@
  (name nomad)
  (preprocess
   (pps ppx_bitstring))
- (libraries atacama riot telemetry bitstring httpaf http))
+ (libraries trail atacama riot telemetry bitstring httpaf http digestif uutf))

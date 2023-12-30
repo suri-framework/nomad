@@ -10,25 +10,11 @@ module Test : Application.Intf = struct
     sleep 0.1;
     Logger.info (fun f -> f "starting nomad server");
 
-    let handler conn req =
-      Logger.debug (fun f -> f "req: %a" Http.Request.pp req);
-      let status = `OK in
-      let body = "hello world" in
-      let headers =
-        Http.Header.of_list
-          [
-            ("content-length", body |> String.length |> string_of_int);
-            ("connection", "close");
-          ]
-      in
-
-      let res = Http.Response.make ~version:req.version ~status ~headers () in
-      let res = Nomad.Http1.to_string res in
-      Logger.debug (fun f -> f "res:\n%s" (IO.Buffer.to_string res));
-      let bytes = Atacama.Connection.send conn res |> Result.get_ok in
-      Logger.debug (fun f -> f "wrote %d bytes" bytes);
-      conn
+    let hello_world (conn : Trail.Conn.t) =
+      conn |> Trail.Conn.send_response ~status:`OK ~body:"hello world"
     in
+
+    let handler = Nomad.trail [ hello_world ] in
 
     Nomad.start_link ~port:2112 ~handler ()
 end

@@ -1,3 +1,9 @@
-(executables
- (names hello_world)
- (libraries nomad riot))
+(executable
+ (name hello_world)
+ (modules hello_world)
+ (libraries nomad))
+
+(executable
+ (name hello_world_eio)
+ (modules hello_world_eio)
+ (libraries cohttp cohttp-eio eio eio_main))

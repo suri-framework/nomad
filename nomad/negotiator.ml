@@ -1,4 +1,5 @@
 open Riot
+open Atacama.Handler
 
 let ( let* ) = Result.bind
 
@@ -14,13 +15,15 @@ let sniff_wire conn =
   | "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n" -> Ok `http2
   | data -> Ok (`no_match data)
 
-let negotiated_protocol ~enabled_protocols conn =
+let negotiated_protocol ~enabled_protocols conn handler =
   let enabled proto = List.mem proto enabled_protocols in
   let* wire = sniff_wire conn in
   let alpn = alpn_protocol conn in
   match (alpn, wire) with
   | (`http2 | `no_match), `http2 when enabled `http2 ->
-      Ok (Session.make (module Protocol.Http2) None)
+      let state = Protocol.Http2.make ~sniffed_data:None ~handler () in
+      Ok (H { handler = (module Protocol.Http2); state })
   | (`http1 | `no_match), `no_match data when enabled `http1 ->
-      Ok (Session.make (module Protocol.Http1) (Some data))
+      let state = Protocol.Http1.make ~sniffed_data:(Some data) ~handler () in
+      Ok (H { handler = (module Protocol.Http1); state })
   | _ -> Error `No_protocol_matched
