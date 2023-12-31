@@ -9,12 +9,12 @@ module H2_stream = struct
 
   let rec loop conn =
     match receive () with
-    Frame frame -> 
-      Logger.debug (fun f -> f "frame: %a" Frame.pp frame);
-      let frame = Frame.serialize frame in
-      let _ = Atacama.Connection.send conn frame in
-      loop conn
-      | _ -> loop conn
+    | Frame frame ->
+        Logger.debug (fun f -> f "frame: %a" Frame.pp frame);
+        let frame = Frame.serialize frame in
+        let _ = Atacama.Connection.send conn frame in
+        loop conn
+    | _ -> loop conn
 
   let init stream_id conn =
     Logger.debug (fun f ->
@@ -76,18 +76,29 @@ type error =
     | `window_size_too_large of int ]
   | `could_not_initialize_connection ]
 
-let err_to_str (err: error) =
+let err_to_str (err : error) =
   match err with
   | `could_not_initialize_connection -> "Could not initialize HTTP/2 connection"
-  | `protocol_error (`invalid_settings_frame_with_stream_id sid) -> Format.sprintf "Protocol error: invalid SETTINGS frame with stream_id=%d" sid
-  | `protocol_error `continuation_frame_with_zero_stream_id -> "Protocol error: invalid CONTINUATION frame with stream_id=0"
-  | `protocol_error `headers_frame_with_zero_stream_id -> "Protocol error: invalid HEADERS frame with stream_id=0"
-  | `protocol_error `data_frame_with_zero_stream_id ->"Protocol error: invalid DATA frame with stream_id=0"
-  | `protocol_error `data_frame_with_invalid_padding_length -> "Protocol error: DATA frame with invalid padding length"
-  | `settings_error (`frame_size_too_small size) -> Format.sprintf "SETTINGS error: max frame size of %d is too small " size
-  | `settings_error (`frame_size_too_large size) -> Format.sprintf "SETTINGS error: max frame size of %d is too large " size
-  | `settings_error (`window_size_too_large size) -> Format.sprintf "SETTINGS error: initial window size of %d is too large " size
-  | `settings_error `invalid_enable_push_value -> "Protocol error: invalid `enable_push` frame settings value"
+  | `protocol_error (`invalid_settings_frame_with_stream_id sid) ->
+      Format.sprintf "Protocol error: invalid SETTINGS frame with stream_id=%d"
+        sid
+  | `protocol_error `continuation_frame_with_zero_stream_id ->
+      "Protocol error: invalid CONTINUATION frame with stream_id=0"
+  | `protocol_error `headers_frame_with_zero_stream_id ->
+      "Protocol error: invalid HEADERS frame with stream_id=0"
+  | `protocol_error `data_frame_with_zero_stream_id ->
+      "Protocol error: invalid DATA frame with stream_id=0"
+  | `protocol_error `data_frame_with_invalid_padding_length ->
+      "Protocol error: DATA frame with invalid padding length"
+  | `settings_error (`frame_size_too_small size) ->
+      Format.sprintf "SETTINGS error: max frame size of %d is too small " size
+  | `settings_error (`frame_size_too_large size) ->
+      Format.sprintf "SETTINGS error: max frame size of %d is too large " size
+  | `settings_error (`window_size_too_large size) ->
+      Format.sprintf "SETTINGS error: initial window size of %d is too large "
+        size
+  | `settings_error `invalid_enable_push_value ->
+      "Protocol error: invalid `enable_push` frame settings value"
   | err -> Marshal.to_string err []
 
 let pp_err fmt err = Format.fprintf fmt "%s" (err_to_str err)

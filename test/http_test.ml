@@ -1,6 +1,7 @@
 [@@@warning "-8"]
 
 open Riot
+open Trail
 
 module Test : Application.Intf = struct
   let name = "test"
@@ -10,7 +11,7 @@ module Test : Application.Intf = struct
     sleep 0.1;
     Logger.info (fun f -> f "starting nomad server");
 
-    let hello_world (conn : Trail.Conn.t) = conn |> Trail.Conn.upgrade `h2c in
+    let hello_world conn = conn |> Conn.send_response `OK ~body:"hello world" in
 
     let handler = Nomad.trail [ hello_world ] in
 

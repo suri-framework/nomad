@@ -1,10 +1,14 @@
-(test
+(executable
+ (name h2spec)
+ (modules h2spec)
+ (libraries trail nomad riot))
+
+(executable
  (name http_test)
  (modules http_test)
- (deps tls.crt tls.key)
  (libraries trail nomad riot x509 mirage-crypto-rng mirage-crypto-rng.unix))
 
-(test
+(executable
  (name ws_test)
  (modules ws_test)
  (libraries trail nomad riot))
