@@ -102,7 +102,15 @@ module Settings = struct
     max_concurrent_streams : int;
   }
 
-  type t = { ack : bool; settings : settings }
+  type t = { stream_id : stream_id; ack : bool; settings : settings }
+
+  let pp fmt t =
+    Format.fprintf fmt
+      "stream_id=%d; ack=%b; header_table_size=%d; initial_window_size=%d; \
+       max_frame_size=%d; max_header_list_size=%d; max_concurrent_streams=%d"
+      t.stream_id t.ack t.settings.header_table_size
+      t.settings.initial_window_size t.settings.max_frame_size
+      t.settings.max_header_list_size t.settings.max_concurrent_streams
 
   let default_settings =
     {
@@ -113,9 +121,9 @@ module Settings = struct
       max_concurrent_streams = Int.max_int;
     }
 
-  let empty = { ack = false; settings = default_settings }
+  let empty = { stream_id = 0; ack = true; settings = default_settings }
 
-  let parse_settings (payload : Bitstring.t) =
+  let parse_settings ~stream_id (payload : Bitstring.t) =
     let settings =
       payload
       |> Stream.unfold
@@ -150,14 +158,14 @@ module Settings = struct
              | _, Error reason -> `halt (Error reason))
     in
     match settings with
-    | Ok settings -> Ok { ack = true; settings }
+    | Ok settings -> Ok { stream_id; ack = true; settings }
     | Error reason -> Error reason
 
   let make ~flags ~stream_id ~payload =
     if stream_id != 0 then
       Error (`protocol_error (`invalid_settings_frame_with_stream_id stream_id))
-    else if not (has_ack_bit flags) then parse_settings payload
-    else Ok { ack = false; settings = default_settings }
+    else if not (has_ack_bit flags) then parse_settings ~stream_id payload
+    else Ok { stream_id; ack = false; settings = default_settings }
 
   let parts t =
     let payload =
@@ -165,7 +173,7 @@ module Settings = struct
         (t.settings.header_table_size, 4_096, 0x01);
         (t.settings.max_concurrent_streams, Int.max_int, 0x03);
         (t.settings.initial_window_size, 65_535, 0x04);
-        (t.settings.max_frame_size, 16_384, 0x05);
+        (t.settings.max_frame_size, max_frame_size, 0x05);
         (t.settings.max_header_list_size, Int.max_int, 0x06);
       ]
       |> List.map (fun (value, default, code) ->
@@ -460,7 +468,7 @@ let pp fmt t =
   | Go_away _ -> Format.fprintf fmt "Go_away"
   | Window_update _ -> Format.fprintf fmt "Window_update"
   | Continuation _ -> Format.fprintf fmt "Continuation"
-  | Settings _ -> Format.fprintf fmt "Settings"
+  | Settings t -> Format.fprintf fmt "Settings(%a)" Settings.pp t
   | Unknown _ -> Format.fprintf fmt "Unknown"
 
 let stream_id t =
@@ -469,7 +477,7 @@ let stream_id t =
   | Headers { stream_id; _ } -> stream_id
   | Priority { stream_id; _ } -> stream_id
   | Rst_stream { stream_id; _ } -> stream_id
-  | Settings _ -> 0x0
+  | Settings { stream_id; _ } -> stream_id
   | Push_promise _ -> 0x0
   | Ping _ -> 0x0
   | Go_away _ -> 0x0

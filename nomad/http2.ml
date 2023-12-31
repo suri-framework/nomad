@@ -130,7 +130,9 @@ let handle_connection conn state =
   Logger.debug (fun f -> f "switched to http2");
   let frame = Frame.serialize Frame.empty_settings in
   match Atacama.Connection.send conn frame with
-  | Ok _ -> Continue state
+  | Ok n ->
+      Logger.debug (fun f -> f "sent %d bytes" n);
+      Continue state
   | _ -> Error (state, `could_not_initialize_connection)
 
 let handle_frame frame conn state =
