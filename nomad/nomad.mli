@@ -11,6 +11,7 @@ end
 
 val start_link :
   ?acceptor_count:int ->
+  ?transport:Atacama.Transport.t ->
   port:int ->
   handler:Handler.t ->
   unit ->

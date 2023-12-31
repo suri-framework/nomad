@@ -1,9 +1,10 @@
 (test
- (name nomad_test)
- (modules nomad_test)
- (libraries nomad atacama riot))
+ (name http_test)
+ (modules http_test)
+ (deps tls.crt tls.key)
+ (libraries trail nomad riot x509 mirage-crypto-rng mirage-crypto-rng.unix))
 
 (test
  (name ws_test)
  (modules ws_test)
- (libraries nomad atacama riot))
+ (libraries trail nomad riot))

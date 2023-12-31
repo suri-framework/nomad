@@ -20,7 +20,6 @@ depends: [
   "ppx_bitstring" {>= "4.1.0"}
   "riot" {>= "0.0.7"}
   "telemetry" {>= "0.0.1"}
-  "websocketaf" {>= "6.0.0~alpha2"}
   "odoc" {with-doc}
 ]
 build: [

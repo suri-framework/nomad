@@ -46,7 +46,9 @@ let run_handler state conn req =
       let state = Ws.handshake conn state in
       Switch (H { handler = (module Ws); state })
   | Handler.Upgrade `h2c ->
-      let state = Http2.make ~sniffed_data:None ~handler:state.handler () in
+      Logger.debug (fun f -> f "upgrading to h2c");
+      let state = Http2.make ~handler:state.handler ~conn () in
+      let state = Http2.handshake conn state in
       Switch (H { handler = (module Http2); state })
 
 let handle_data data conn state =

@@ -6,13 +6,11 @@ module Test : Application.Intf = struct
   let name = "test"
 
   let start () =
-    Logger.set_log_level (Some Info);
+    Logger.set_log_level (Some Debug);
     sleep 0.1;
     Logger.info (fun f -> f "starting nomad server");
 
-    let hello_world (conn : Trail.Conn.t) =
-      conn |> Trail.Conn.send_response ~status:`OK ~body:"hello world"
-    in
+    let hello_world (conn : Trail.Conn.t) = conn |> Trail.Conn.upgrade `h2c in
 
     let handler = Nomad.trail [ hello_world ] in
 

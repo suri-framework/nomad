@@ -27,7 +27,9 @@ module Test : Application.Intf = struct
 
     let handler = Nomad.trail [ Trail.logger ~level:Debug (); ws_echo ] in
 
-    Nomad.start_link ~port:2112 ~handler ()
+    Nomad.start_link ~port:2112
+      ~transport:(Atacama.Transport.ssl ~config)
+      ~handler ()
 end
 
 let () = Riot.start ~apps:[ (module Logger); (module Test) ] ()

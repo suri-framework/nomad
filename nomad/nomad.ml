@@ -2,8 +2,8 @@ module Handler = Handler
 module Request = Request
 module Protocol = Protocol
 
-let start_link ?acceptor_count ~port ~handler () =
-  Atacama.start_link ~port ?acceptor_count
+let start_link ?acceptor_count ?transport ~port ~handler () =
+  Atacama.start_link ~port ?acceptor_count ?transport
     (module Connection_handler)
     (Connection_handler.make ~handler ())
 
