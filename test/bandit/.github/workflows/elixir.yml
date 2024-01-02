@@ -1,0 +1,17 @@
+name: Elixir CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    uses: mtrudel/elixir-ci-actions/.github/workflows/test.yml@main
+  lint:
+    uses: mtrudel/elixir-ci-actions/.github/workflows/lint.yml@main
+  h2spec:
+    uses: ./.github/workflows/h2spec.yml
+  autobahn:
+    uses: ./.github/workflows/autobahn.yml

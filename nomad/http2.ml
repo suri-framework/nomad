@@ -11,8 +11,6 @@ module H2_stream = struct
     match receive () with
     | Frame frame ->
         Logger.debug (fun f -> f "frame: %a" Frame.pp frame);
-        let frame = Frame.serialize frame in
-        let _ = Atacama.Connection.send conn frame in
         loop conn
     | _ -> loop conn
 

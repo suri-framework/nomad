@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="1. Starting HTTP/2" package="generic/1" id="1" tests="1" skipped="0" failures="0" errors="0">
+    <testcase package="generic/1" classname="Sends a client connection preface" time="0.0199"></testcase>
+  </testsuite>
+  <testsuite name="2. Streams and Multiplexing" package="generic/2" id="2" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="3.1. DATA" package="generic/3.1" id="3.1" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="3.2. HEADERS" package="generic/3.2" id="3.2" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="3.3. PRIORITY" package="generic/3.3" id="3.3" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="3.4. RST_STREAM" package="generic/3.4" id="3.4" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="3.5. SETTINGS" package="generic/3.5" id="3.5" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="3.7. PING" package="generic/3.7" id="3.7" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="3.8. GOAWAY" package="generic/3.8" id="3.8" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="3.9. WINDOW_UPDATE" package="generic/3.9" id="3.9" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="3.10. CONTINUATION" package="generic/3.10" id="3.10" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="4. HTTP Message Exchanges" package="generic/4" id="4" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="5. HPACK" package="generic/5" id="5" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="3.5. HTTP/2 Connection Preface" package="http2/3.5" id="3.5" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="4.1. Frame Format" package="http2/4.1" id="4.1" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="4.2. Frame Size" package="http2/4.2" id="4.2" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="4.3. Header Compression and Decompression" package="http2/4.3" id="4.3" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="5.1. Stream States" package="http2/5.1" id="5.1" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="5.1.1. Stream Identifiers" package="http2/5.1.1" id="5.1.1" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="5.1.2. Stream Concurrency" package="http2/5.1.2" id="5.1.2" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="5.3.1. Stream Dependencies" package="http2/5.3.1" id="5.3.1" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="5.4.1. Connection Error Handling" package="http2/5.4.1" id="5.4.1" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="5.5. Extending HTTP/2" package="http2/5.5" id="5.5" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="6.1. DATA" package="http2/6.1" id="6.1" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="6.2. HEADERS" package="http2/6.2" id="6.2" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="6.3. PRIORITY" package="http2/6.3" id="6.3" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="6.4. RST_STREAM" package="http2/6.4" id="6.4" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="6.5. SETTINGS" package="http2/6.5" id="6.5" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="6.5.2. Defined SETTINGS Parameters" package="http2/6.5.2" id="6.5.2" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="6.5.3. Settings Synchronization" package="http2/6.5.3" id="6.5.3" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="6.7. PING" package="http2/6.7" id="6.7" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="6.8. GOAWAY" package="http2/6.8" id="6.8" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="6.9. WINDOW_UPDATE" package="http2/6.9" id="6.9" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="6.9.1. The Flow-Control Window" package="http2/6.9.1" id="6.9.1" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="6.9.2. Initial Flow-Control Window Size" package="http2/6.9.2" id="6.9.2" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="6.10. CONTINUATION" package="http2/6.10" id="6.10" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="7. Error Codes" package="http2/7" id="7" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="8.1. HTTP Request/Response Exchange" package="http2/8.1" id="8.1" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="8.1.2. HTTP Header Fields" package="http2/8.1.2" id="8.1.2" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="8.1.2.1. Pseudo-Header Fields" package="http2/8.1.2.1" id="8.1.2.1" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="8.1.2.2. Connection-Specific Header Fields" package="http2/8.1.2.2" id="8.1.2.2" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="8.1.2.3. Request Pseudo-Header Fields" package="http2/8.1.2.3" id="8.1.2.3" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="8.1.2.6. Malformed Requests and Responses" package="http2/8.1.2.6" id="8.1.2.6" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="8.2. Server Push" package="http2/8.2" id="8.2" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="2.3.3. Index Address Space" package="hpack/2.3.3" id="2.3.3" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="4.2. Maximum Table Size" package="hpack/4.2" id="4.2" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="5.2. String Literal Representation" package="hpack/5.2" id="5.2" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="6.1. Indexed Header Field Representation" package="hpack/6.1" id="6.1" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+  <testsuite name="6.3. Dynamic Table Size Update" package="hpack/6.3" id="6.3" tests="0" skipped="0" failures="0" errors="0"></testsuite>
+</testsuites>

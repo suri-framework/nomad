@@ -1,0 +1,10 @@
+#!/bin/bash
+
+docker run \
+  -ti --rm \
+  summerwind/h2spec \
+  -h "host.docker.internal" \
+  -p 2112 \
+  $1 \
+  --strict \
+  -j "./test/h2spec/report.$(date +%s).xml"

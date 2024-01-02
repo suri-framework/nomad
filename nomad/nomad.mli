@@ -25,8 +25,12 @@ module Protocol : sig
   module Http1 : sig
     include Intf
 
-    val make : sniffed_data:string option -> handler:Handler.t -> unit -> state
-    val to_string : Http.Response.t -> Riot.IO.Buffer.t
+    val make :
+      are_we_tls:bool ->
+      sniffed_data:string option ->
+      handler:Handler.t ->
+      unit ->
+      state
   end
 
   module Http2 : Intf

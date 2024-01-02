@@ -9,3 +9,125 @@ HTTP/2, and WebSockets. It is written with a big focus on clarity.
 [caravan]: https://github.com/leostera/caravan
 [trail]: https://github.com/leostera/trail
 [bandit]: https://github.com/mtrudel/bandit
+
+## Correctness
+
+Nomad aims to be **correct** and so we're testing against the [Bandit HTTP/1.1
+test-bed][bandit-tests], [h2spec][h2spec], and [Autobahn][autobahn]
+
+[bandit-tests]: ./test/bandit/test/bandit/http1/request_test.exs
+[h2spec]: https://github.com/summerwind/h2spec
+[autobahn]: https://github.com/crossbario/autobahn-testsuite
+
+### HTTP/1.1
+
+- [ ] invalid requests
+  - [ ] returns a 400 if the request cannot be parsed
+  - [ ] returns a 400 if the request has an invalid http version
+- [ ] keepalive requests
+  - [ ] closes connection after max_requests is reached
+  - [ ] idle keepalive connections are closed after read_timeout
+  - [ ] unread content length bodies are read before starting a new request
+  - [ ] unread chunked bodies are read before starting a new request
+- [ ] origin-form request target (RFC9112§3.2.1)
+  - [ ] derives scheme from underlying transport
+  - [ ] derives host from host header
+  - [ ] returns 400 if no host header set in HTTP/1.1
+  - [ ] sets a blank host if no host header set in HTTP/1.0
+  - [ ] derives port from host header
+  - [ ] derives host from host header with ipv6 host
+  - [ ] derives host and port from host header with ipv6 host
+  - [ ] returns 400 if port cannot be parsed from host header
+  - [ ] derives port from schema default if no port specified in host header
+  - [ ] derives port from schema default if no host header set in HTTP/1.0
+  - [ ] sets path and query string properly when no query string is present
+  - [ ] sets path and query string properly when query string is present
+  - [ ] ignores fragment when no query string is present
+  - [ ] ignores fragment when query string is present
+  - [ ] handles query strings with question mark characters in them
+  - [ ] returns 400 if a non-absolute path is send
+  - [ ] returns 400 if path has no leading slash
+- [ ] absolute-form request target (RFC9112§3.2.2)
+  - [ ] uses request-line scheme even if it does not match the transport
+  - [ ] derives host from the URI, even if it differs from host header
+  - [ ] derives ipv6 host from the URI, even if it differs from host header
+  - [ ] does not require a host header set in HTTP/1.1 (RFC9112§3.2.2)
+  - [ ] derives port from the URI, even if it differs from host header
+  - [ ] derives port from schema default if no port specified in the URI
+  - [ ] sets path and query string properly when no query string is present
+  - [ ] sets path and query string properly when query string is present
+  - [ ] ignores fragment when no query string is present
+  - [ ] ignores fragment when query string is present
+  - [ ] handles query strings with question mark characters in them
+- [ ] authority-form request target (RFC9112§3.2.3)
+  - [ ] returns 400 for authority-form / CONNECT requests
+- [ ] asterisk-form request target (RFC9112§3.2.4)
+  - [ ] parse global OPTIONS path correctly
+- [ ] request line limits
+  - [ ] returns 414 for request lines that are too long
+- [ ] request headers
+  - [ ] reads headers properly
+  - [ ] returns 431 for header lines that are too long
+  - [ ] returns 431 for too many header lines
+- [ ] content-length request bodies
+  - [ ] reads a zero length body properly
+  - [ ] reads a content-length encoded body properly
+  - [ ] reads a content-length with multiple content-lengths encoded body properly
+  - [ ] rejects a request with non-matching multiple content lengths
+  - [ ] rejects a request with negative content-length
+  - [ ] rejects a request with non-integer content length
+  - [ ] handles the case where we ask for less than is already in the buffer
+  - [ ] handles the case where we ask for more than is already in the buffer
+  - [ ] handles the case where we read from the network in smaller chunks than we return
+  - [ ] handles the case where the declared content length is longer than what is sent
+  - [ ] handles the case where the declared content length is less than what is sent
+  - [ ] reading request body multiple times works as expected
+- [ ] chunked request bodies
+  - [ ] reads a chunked body properly
+- [ ] upgrade handling
+  - [ ] raises an ArgumentError on unsupported upgrades
+  - [ ] returns a 400 and errors loudly in cases where an upgrade is indicated but the connection is not a GET
+  - [ ] returns a 400 and errors loudly in cases where an upgrade is indicated but upgrade header is incorrect
+  - [ ] returns a 400 and errors loudly in cases where an upgrade is indicated but connection header is incorrect
+  - [ ] returns a 400 and errors loudly in cases where an upgrade is indicated but key header is incorrect
+  - [ ] returns a 400 and errors loudly in cases where an upgrade is indicated but version header is incorrect
+  - [ ] returns a 400 and errors loudly if websocket support is not enabled
+- [ ] response headers
+  - [ ] writes out a response with a valid date header
+  - [ ] returns user-defined date header instead of internal version
+- [ ] response body
+  - [ ] writes out a response with deflate encoding if so negotiated
+  - [ ] writes out a response with gzip encoding if so negotiated
+  - [ ] writes out a response with x-gzip encoding if so negotiated
+  - [x] uses the first matching encoding in accept-encoding
+  - [x] falls back to no encoding if no encodings provided
+  - [x] does no encoding if content-encoding header already present in response
+  - [x] does no encoding if a strong etag is present in the response
+  - [x] does content encoding if a weak etag is present in the response
+  - [x] does no encoding if cache-control: no-transform is present in the response
+  - [x] falls back to no encoding if no encodings match
+  - [ ] falls back to no encoding if compression is disabled
+  - [x] sends expected content-length but no body for HEAD requests
+  - [x] replaces any incorrect provided content-length headers
+  - [x] writes out a response with no content-length header or body for 204 responses
+  - [x] writes out a response with no content-length header or body for 304 responses
+  - [x] writes out a response with zero content-length for 200 responses
+  - [x] writes out a response with zero content-length for 301 responses
+  - [x] writes out a response with zero content-length for 401 responses
+  - [ ] writes out a chunked response
+  - [ ] does not write out a body for a chunked response to a HEAD request
+  - [ ] writes out a chunked iolist response
+  - [ ] returns socket errors on chunk calls
+  - [ ] writes out a sent file for the entire file with content length
+  - [ ] writes out headers but not body for files requested via HEAD request
+  - [ ] does not write out a content-length header or body for files on a 204
+  - [ ] does not write out a content-length header or body for files on a 304
+  - [ ] writes out a sent file for parts of a file with content length
+- [ ] sending informational responses
+- [ ] does not send informational responses to HTTP/1.0 clients
+- [ ] reading HTTP version
+- [ ] reading peer data
+
+### HTTP/2
+
+### WebSockets

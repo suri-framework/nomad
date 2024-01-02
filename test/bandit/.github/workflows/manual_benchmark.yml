@@ -1,0 +1,83 @@
+name: Manual Benchmark
+
+on: 
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Which profile of test to run
+        required: true
+        default: 'normal'
+        type: choice
+        options: 
+        - 'normal'
+        - 'tiny'
+        - 'huge'
+      protocol:
+        description: Which protocol to test
+        required: true
+        default: 'http/1.1,h2c,ws'
+        type: choice
+        options: 
+        - 'http/1.1,h2c,ws'
+        - 'http/1.1'
+        - 'h2c'
+        - 'ws'
+      baseline_server:
+        description: Which server to use as baseline
+        required: true
+        default: 'bandit'
+        type: choice
+        options: 
+        - bandit
+        - cowboy
+      baseline_version:
+        description: Which version of the baseline to use
+        required: true
+        default: 'main'
+      test_server:
+        description: Which server to test
+        required: true
+        default: 'bandit'
+        type: choice
+        options: 
+        - bandit
+        - cowboy
+      test_version:
+        description: Which version of the server to test
+        required: true
+        default: 'main'
+
+run-name: ${{ inputs.test_server }}@${{ inputs.test_version }} vs ${{ inputs.baseline_server }}@${{ inputs.baseline_version }} (${{ inputs.profile }})
+
+env:
+  MIX_ENV: test
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Install nghttp2
+      run: sudo apt-get install nghttp2
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with: 
+        repository: mtrudel/benchmark
+    - name: Setup Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: 1.14.x
+        otp-version: 25.1
+    - name: Install mix dependencies
+      run: mix deps.get
+    - name: Compile code
+      run: mix compile
+    - name: Run benchmark
+      run: mix benchmark --profile ${{ inputs.profile }} --protocol ${{ inputs.protocol }} ${{ inputs.baseline_server }}@${{ inputs.baseline_version }} ${{ inputs.test_server }}@${{ inputs.test_version }}
+    - name: Upload results file
+      uses: actions/upload-artifact@v4
+      with:
+        name: http-benchmark.csv
+        path: http-benchmark.csv
+    - name: Record summary output
+      id: summary
+      run: cat http-summary.md >> $GITHUB_STEP_SUMMARY

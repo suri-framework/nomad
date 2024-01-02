@@ -25,7 +25,10 @@ let negotiated_protocol ~enabled_protocols conn handler =
       let state = Protocol.Http2.make ~handler ~conn () in
       Ok (H { handler = (module Protocol.Http2); state })
   | (`http1 | `no_match), `no_match data when enabled `http1 ->
+      let are_we_tls = alpn = `http1 in
       Logger.error (fun f -> f " http1 detected! ");
-      let state = Protocol.Http1.make ~sniffed_data:(Some data) ~handler () in
+      let state =
+        Protocol.Http1.make ~are_we_tls ~sniffed_data:(Some data) ~handler ()
+      in
       Ok (H { handler = (module Protocol.Http1); state })
   | _ -> Error `No_protocol_matched
