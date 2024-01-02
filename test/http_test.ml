@@ -62,28 +62,41 @@ module Test : Application.Intf = struct
           conn
           |> Conn.with_header "content-length" "10001"
           |> Conn.send_response `OK ~body:(String.make 10_000 'a')
-      | [ "send_200" ] ->
-          conn
-          |> Conn.send_response `OK
+      | [ "send_200" ] -> conn |> Conn.send_response `OK
       | [ "send_204" ] ->
-          conn
-          |> Conn.send_response `No_content ~body:("bad content")
-      | [ "send_301" ] ->
-          conn
-          |> Conn.send_response `Moved_permanently
+          conn |> Conn.send_response `No_content ~body:"bad content"
+      | [ "send_301" ] -> conn |> Conn.send_response `Moved_permanently
       | [ "send_304" ] ->
-          conn
-          |> Conn.send_response `Not_modified ~body:("bad content")
-      | [ "send_401" ] ->
-          conn
-          |> Conn.send_response `Forbidden
+          conn |> Conn.send_response `Not_modified ~body:"bad content"
+      | [ "send_401" ] -> conn |> Conn.send_response `Forbidden
       | [ "send_chunked_200" ] ->
+          conn |> Conn.send_chunked `OK |> Conn.chunk "OK" |> Conn.close
+      | [ "erroring_chunk" ] ->
+          let conn = conn |> Conn.send_chunked `OK |> Conn.chunk "OK" in
+          Atacama.Connection.close conn.conn;
+          conn |> Conn.chunk "NOT OK"
+      | [ "send_file" ] ->
+          let query = Uri.query conn.req.uri in
+          Logger.debug (fun f -> f "%S" (Uri.encoded_of_query query));
+          let off = List.assoc "offset" query |> List.hd |> int_of_string in
+          let len = List.assoc "length" query |> List.hd |> int_of_string in
           conn
-          |> Conn.send_chunked `OK
-          |> Conn.chunk "OK"
+          |> Conn.send_file ~off ~len `OK "./test/bandit/test/support/sendfile"
+      | [ "send_full_file" ] ->
+          conn |> Conn.send_file `OK "./test/bandit/test/support/sendfile"
+      | [ "send_full_file_204" ] ->
+          conn
+          |> Conn.send_file `No_content "./test/bandit/test/support/sendfile"
+      | [ "send_inform" ] ->
+          conn
+          |> Conn.inform `Continue [ ("x-from", "inform") ]
+          |> Conn.send_response `OK ~body:"Informer"
+      | [ "report_version" ] ->
+          let body = conn.req.version |> Http.Version.to_string in
+          conn |> Conn.send_response `OK ~body
       | _ ->
           let body = conn.req.body |> Option.map IO.Buffer.to_string in
-          conn |> Conn.send_response `OK ?body
+          conn |> Conn.send_response `Not_implemented ?body
     in
 
     let handler = Nomad.trail [ hello_world ] in

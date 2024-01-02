@@ -21,46 +21,46 @@ test-bed][bandit-tests], [h2spec][h2spec], and [Autobahn][autobahn]
 
 ### HTTP/1.1
 
-- [ ] invalid requests
-  - [ ] returns a 400 if the request cannot be parsed
-  - [ ] returns a 400 if the request has an invalid http version
-- [ ] keepalive requests
-  - [ ] closes connection after max_requests is reached
-  - [ ] idle keepalive connections are closed after read_timeout
-  - [ ] unread content length bodies are read before starting a new request
-  - [ ] unread chunked bodies are read before starting a new request
-- [ ] origin-form request target (RFC9112§3.2.1)
-  - [ ] derives scheme from underlying transport
-  - [ ] derives host from host header
-  - [ ] returns 400 if no host header set in HTTP/1.1
-  - [ ] sets a blank host if no host header set in HTTP/1.0
-  - [ ] derives port from host header
-  - [ ] derives host from host header with ipv6 host
-  - [ ] derives host and port from host header with ipv6 host
+- [x] invalid requests
+  - [x] returns a 400 if the request cannot be parsed
+  - [x] returns a 400 if the request has an invalid http version
+- [x] keepalive requests
+  - [x] closes connection after max_requests is reached
+  - [x] idle keepalive connections are closed after read_timeout
+  - [x] unread content length bodies are read before starting a new request
+  - [x] unread chunked bodies are read before starting a new request
+- [x] origin-form request target (RFC9112§3.2.1)
+  - [x] derives scheme from underlying transport
+  - [x] derives host from host header
+  - [x] returns 400 if no host header set in HTTP/1.1
+  - [x] sets a blank host if no host header set in HTTP/1.0
+  - [x] derives port from host header
+  - [x] derives host from host header with ipv6 host
+  - [x] derives host and port from host header with ipv6 host
   - [ ] returns 400 if port cannot be parsed from host header
-  - [ ] derives port from schema default if no port specified in host header
-  - [ ] derives port from schema default if no host header set in HTTP/1.0
-  - [ ] sets path and query string properly when no query string is present
-  - [ ] sets path and query string properly when query string is present
-  - [ ] ignores fragment when no query string is present
-  - [ ] ignores fragment when query string is present
-  - [ ] handles query strings with question mark characters in them
-  - [ ] returns 400 if a non-absolute path is send
-  - [ ] returns 400 if path has no leading slash
-- [ ] absolute-form request target (RFC9112§3.2.2)
-  - [ ] uses request-line scheme even if it does not match the transport
-  - [ ] derives host from the URI, even if it differs from host header
-  - [ ] derives ipv6 host from the URI, even if it differs from host header
-  - [ ] does not require a host header set in HTTP/1.1 (RFC9112§3.2.2)
-  - [ ] derives port from the URI, even if it differs from host header
-  - [ ] derives port from schema default if no port specified in the URI
-  - [ ] sets path and query string properly when no query string is present
-  - [ ] sets path and query string properly when query string is present
-  - [ ] ignores fragment when no query string is present
-  - [ ] ignores fragment when query string is present
-  - [ ] handles query strings with question mark characters in them
-- [ ] authority-form request target (RFC9112§3.2.3)
-  - [ ] returns 400 for authority-form / CONNECT requests
+  - [x] derives port from schema default if no port specified in host header
+  - [x] derives port from schema default if no host header set in HTTP/1.0
+  - [x] sets path and query string properly when no query string is present
+  - [x] sets path and query string properly when query string is present
+  - [x] ignores fragment when no query string is present
+  - [x] ignores fragment when query string is present
+  - [x] handles query strings with question mark characters in them
+  - [x] returns 400 if a non-absolute path is send
+  - [x] returns 400 if path has no leading slash
+- [x] absolute-form request target (RFC9112§3.2.2)
+  - [x] uses request-line scheme even if it does not match the transport
+  - [x] derives host from the URI, even if it differs from host header
+  - [x] derives ipv6 host from the URI, even if it differs from host header
+  - [x] does not require a host header set in HTTP/1.1 (RFC9112§3.2.2)
+  - [x] derives port from the URI, even if it differs from host header
+  - [x] derives port from schema default if no port specified in the URI
+  - [x] sets path and query string properly when no query string is present
+  - [x] sets path and query string properly when query string is present
+  - [x] ignores fragment when no query string is present
+  - [x] ignores fragment when query string is present
+  - [x] handles query strings with question mark characters in them
+- [x] authority-form request target (RFC9112§3.2.3)
+  - [x] returns 400 for authority-form / CONNECT requests
 - [ ] asterisk-form request target (RFC9112§3.2.4)
   - [ ] parse global OPTIONS path correctly
 - [ ] request line limits
@@ -96,8 +96,8 @@ test-bed][bandit-tests], [h2spec][h2spec], and [Autobahn][autobahn]
   - [ ] writes out a response with a valid date header
   - [ ] returns user-defined date header instead of internal version
 - [ ] response body
-  - [ ] writes out a response with deflate encoding if so negotiated
-  - [ ] writes out a response with gzip encoding if so negotiated
+  - [x] writes out a response with deflate encoding if so negotiated
+  - [x] writes out a response with gzip encoding if so negotiated
   - [ ] writes out a response with x-gzip encoding if so negotiated
   - [x] uses the first matching encoding in accept-encoding
   - [x] falls back to no encoding if no encodings provided
@@ -114,18 +114,17 @@ test-bed][bandit-tests], [h2spec][h2spec], and [Autobahn][autobahn]
   - [x] writes out a response with zero content-length for 200 responses
   - [x] writes out a response with zero content-length for 301 responses
   - [x] writes out a response with zero content-length for 401 responses
-  - [ ] writes out a chunked response
-  - [ ] does not write out a body for a chunked response to a HEAD request
-  - [ ] writes out a chunked iolist response
-  - [ ] returns socket errors on chunk calls
-  - [ ] writes out a sent file for the entire file with content length
-  - [ ] writes out headers but not body for files requested via HEAD request
-  - [ ] does not write out a content-length header or body for files on a 204
-  - [ ] does not write out a content-length header or body for files on a 304
-  - [ ] writes out a sent file for parts of a file with content length
-- [ ] sending informational responses
-- [ ] does not send informational responses to HTTP/1.0 clients
-- [ ] reading HTTP version
+  - [x] writes out a chunked response
+  - [x] does not write out a body for a chunked response to a HEAD request
+  - [x] returns socket errors on chunk calls
+  - [x] writes out a sent file for the entire file with content length
+  - [x] writes out headers but not body for files requested via HEAD request
+  - [x] does not write out a content-length header or body for files on a 204
+  - [x] does not write out a content-length header or body for files on a 304
+  - [x] writes out a sent file for parts of a file with content length
+- [x] sending informational responses
+- [x] does not send informational responses to HTTP/1.0 clients
+- [x] reading HTTP version
 - [ ] reading peer data
 
 ### HTTP/2

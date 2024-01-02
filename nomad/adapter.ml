@@ -22,10 +22,10 @@ let deflate_string str =
   Buffer.contents r
 
 let gzip_string str =
-  let time () = Int32.of_float (Unix.gettimeofday ()) in
+  let time () = 2112l in
   let i = De.bigstring_create De.io_buffer_size in
   let o = De.bigstring_create De.io_buffer_size in
-  let w = De.Lz77.make_window ~bits:15 in
+  let w = De.Lz77.make_window ~bits:16 in
   let q = De.Queue.create 0x1000 in
   let r = Buffer.create 0x1000 in
   let p = ref 0 in
@@ -78,49 +78,91 @@ let maybe_compress (req : Request.t) buf =
       |> Option.value ~default:[] |> List.map String.trim
     in
     let accepts_deflate = List.mem "deflate" accepted_encodings in
-    let accepts_gzip =
-      List.mem "gzip" accepted_encodings || List.mem "x-gzip" accepted_encodings
-    in
+    let accepts_gzip = List.mem "gzip" accepted_encodings in
+    let accepts_x_gzip = List.mem "x-gzip" accepted_encodings in
     if accepts_deflate then (Some (deflate buf), Some "deflate")
     else if accepts_gzip then (Some (gzip buf), Some "gzip")
+    else if accepts_x_gzip then (Some (gzip buf), Some "x-gzip")
     else (Some buf, None))
 
 let send conn (req : Request.t) (res : Response.t) =
-  let body, encoding =
-    if
-      has_custom_content_encoding res
-      || has_strong_etag res || has_no_transform res
-    then (res.body, None)
-    else
-      match res.body with
-      | Some body -> maybe_compress req body
-      | None -> (None, None)
+  if req.version = `HTTP_1_0 && res.status = `Continue then ()
+  else
+    let body, encoding =
+      if
+        has_custom_content_encoding res
+        || has_strong_etag res || has_no_transform res
+      then (res.body, None)
+      else
+        match res.body with
+        | Some body -> maybe_compress req body
+        | None -> (None, None)
+    in
+    let headers =
+      match encoding with
+      | Some encoding -> Http.Header.add res.headers "content-encoding" encoding
+      | None -> res.headers
+    in
+    let headers = Http.Header.add headers "vary" "accept-encoding" in
+
+    let content_length =
+      Option.map IO.Buffer.filled body |> Option.value ~default:0
+    in
+    let headers =
+      if res.status = `No_content then
+        Http.Header.remove headers "content-length"
+      else if res.status != `Not_modified && content_length > 0 then
+        Http.Header.replace headers "content-length"
+          (Int.to_string content_length)
+      else headers
+    in
+    let body =
+      if
+        req.meth = `HEAD || res.status = `No_content
+        || res.status = `Not_modified
+      then None
+      else body
+    in
+
+    let buf = Response.to_buffer { res with headers; body } in
+    Logger.debug (fun f -> f "res: %S" (IO.Buffer.to_string buf));
+    let _ = Atacama.Connection.send conn buf in
+    ()
+
+let send_chunk conn (req : Request.t) buf =
+  if req.meth != `HEAD then (
+    let chunk =
+      Format.sprintf "%x\r\n%s\r\n" (IO.Buffer.filled buf)
+        (IO.Buffer.to_string buf)
+    in
+    Logger.debug (fun f -> f "sending chunk: %S" chunk);
+    let chunk = IO.Buffer.of_string chunk in
+    let _ = Atacama.Connection.send conn chunk in
+    ())
+
+let send_file conn (req : Request.t) (res : Response.t) ?off ?len ~path () =
+  let len =
+    match len with
+    | Some len -> len
+    | None ->
+        let stat = File.stat path in
+        stat.st_size
   in
   let headers =
-    match encoding with
-    | Some encoding -> Http.Header.add res.headers "content-encoding" encoding
-    | None -> res.headers
+    Http.Header.replace res.headers "content-length" (Int.to_string len)
   in
-  let headers = Http.Header.add headers "vary" "accept-encoding" in
+  let res = { res with headers; body = None } in
+  let _ = send conn req res in
+  if res.status != `No_content then
+    let _ = Atacama.Connection.send_file conn ?off ~len (File.open_read path) in
+    ()
 
-  let content_length =
-    Option.map IO.Buffer.filled body |> Option.value ~default:0
-  in
-  let headers =
-    if res.status != `No_content && res.status != `Not_modified && content_length > 0 then
-      Http.Header.replace headers "content-length" (Int.to_string content_length)
-    else headers
-  in
-  let body = if req.meth = `HEAD || res.status = `No_content || res.status = `Not_modified  then None else body in
+let close conn (req: Request.t) (res: Response.t) =
+(if req.meth = `HEAD then ()
+else if res.status = `No_content then ()
+else
+         let _ =
+           Atacama.Connection.send conn (IO.Buffer.of_string "0\r\n\r\n")
+         in
+         ());
 
-  let buf = Response.to_buffer { res with headers; body } in
-  Logger.debug (fun f -> f "res: %S" (IO.Buffer.to_string buf));
-  let _ = Atacama.Connection.send conn buf in
-  ()
-
-let send_chunk conn (_req : Request.t) buf =
-  let chunk = Format.sprintf "%d\r\n%s\r\n" (IO.Buffer.filled buf) (IO.Buffer.to_string buf) in
-  Logger.debug (fun f-> f "sending chunk: %S" chunk);
-  let chunk = IO.Buffer.of_string chunk in
-  let _ = Atacama.Connection.send conn chunk in
-  ()

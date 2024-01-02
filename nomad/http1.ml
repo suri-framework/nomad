@@ -167,10 +167,12 @@ let make_uri state (req : Trail.Request.t) =
   if Uri.port uri |> Option.value ~default:0 < 0 then raise_notrace Bad_port;
 
   let path = Uri.path req.uri in
+  let query = Uri.query req.uri in
   if not (String.starts_with ~prefix:"/" path) then
     raise_notrace Path_missing_leading_slash;
 
   let uri = Uri.with_path uri path in
+  let uri = Uri.with_query uri query in
   Logger.error (fun f -> f "parse uri: %a" Uri.pp uri);
   uri
 
@@ -194,9 +196,7 @@ let handle_request state conn req body =
   | Handler.Close _conn when is_keep_alive ->
       Logger.debug (fun f -> f "connection is keep alive, continuing");
       Continue { state with sniffed_data = None }
-  | Handler.Close conn ->
-      let _ = Atacama.Connection.send conn (IO.Buffer.of_string "0\r\n\r\n") in
-      Close state
+  | Handler.Close _conn -> Close state
   | Handler.Upgrade (`websocket (upgrade_opts, handler)) ->
       let state = Ws.make ~upgrade_opts ~handler ~req ~conn () in
       let state = Ws.handshake conn state in
@@ -218,7 +218,7 @@ let run_handler state conn req body =
       handle_request state conn { req with uri } body
   | `HTTP_1_1, Some _host, uri ->
       handle_request state conn { req with uri } body
-  | `HTTP_1_0, None, uri -> handle_request state conn { req with uri } body
+  | `HTTP_1_0, _, uri -> handle_request state conn { req with uri } body
   | _ -> bad_request conn state
 
 let handle_data data conn state =
