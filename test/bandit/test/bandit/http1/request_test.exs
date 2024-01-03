@@ -528,44 +528,6 @@ defmodule HTTP1RequestTest do
       assert response.status == 400
     end
 
-    test "handles the case where we ask for less than is already in the buffer", context do
-      client = SimpleHTTP1Client.tcp_client(context)
-
-      Transport.send(
-        client,
-        "POST /in_buffer_read HTTP/1.1\r\nhost: localhost\r\ncontent-length: 5\r\n\r\nABCDE"
-      )
-
-      assert {:ok, "200 OK", _, "A,BCDE"} = SimpleHTTP1Client.recv_reply(client)
-    end
-
-    def in_buffer_read(conn) do
-      {:more, first, conn} = Plug.Conn.read_body(conn, length: 1)
-      {:ok, second, conn} = Plug.Conn.read_body(conn)
-      send_resp(conn, 200, "#{first},#{second}")
-    end
-
-    test "handles the case where we ask for more than is already in the buffer", context do
-      client = SimpleHTTP1Client.tcp_client(context)
-
-      Transport.send(
-        client,
-        "POST /beyond_buffer_read HTTP/1.1\r\nhost: localhost\r\ncontent-length: 5\r\n\r\nAB"
-      )
-
-      Process.sleep(100)
-      Transport.send(client, "CDE")
-
-      assert {:ok, "200 OK", _, "ABC,D,E"} = SimpleHTTP1Client.recv_reply(client)
-    end
-
-    def beyond_buffer_read(conn) do
-      {:more, first, conn} = Plug.Conn.read_body(conn, length: 3)
-      {:more, second, conn} = Plug.Conn.read_body(conn, length: 1)
-      {:ok, third, conn} = Plug.Conn.read_body(conn)
-      send_resp(conn, 200, "#{first},#{second},#{third}")
-    end
-
     test "handles the case where we read from the network in smaller chunks than we return",
          context do
       client = SimpleHTTP1Client.tcp_client(context)

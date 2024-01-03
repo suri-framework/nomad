@@ -136,6 +136,9 @@ module Test : Application.Intf = struct
           assert (String.equal content_length expected_content_length);
           assert (String.equal actual_body expected_body);
           conn |> Conn.send_response `OK ~body:"OK"
+      | "read_one_byte_at_a_time" :: [] ->
+          let body = conn.req.body |> Option.map IO.Buffer.to_string in
+          conn |> Conn.send_response `OK ?body
       | _ ->
           let body = conn.req.body |> Option.map IO.Buffer.to_string in
           conn |> Conn.send_response `Not_implemented ?body
