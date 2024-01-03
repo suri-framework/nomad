@@ -68,16 +68,16 @@ module Parser = struct
     match%bitstring data with
     (* we found the end of the headers *)
     | {| "\r\n\r\n" : 4 * 8 : string ; rest : -1 : bitstring |} ->
-        Logger.error (fun f -> f "found body");
+        Logger.trace (fun f -> f "found body");
         ([], rest)
     (* we found a beginning to the headers, but nothing more, so we need more data *)
     | {| "\r\n" : 2 * 8 : string ; rest : -1 : bitstring|}
       when Bitstring.bitstring_length rest = 0 ->
-        Logger.error (fun f -> f "need more data");
+        Logger.trace (fun f -> f "need more data");
         raise_notrace Need_more_data
     (* we found a beginning to the headers, so we can try to parse them *)
     | {| "\r\n" : 2 * 8 : string ; rest : -1 : bitstring |} ->
-        Logger.error (fun f -> f "parsing headers");
+        Logger.trace (fun f -> f "parsing headers");
         do_parse_headers max_count max_length rest []
     (* anything else is probably a bad request *)
     | {| _ |} -> raise_notrace Bad_request
@@ -165,25 +165,6 @@ let content_length headers =
       | _ :: _ -> raise Invalid_content_header
       | _ -> None)
 
-let rec read_body conn (req : Trail.Request.t) body =
-  let max_body_length = content_length req.headers in
-  let body_length = IO.Buffer.length body in
-  match max_body_length with
-  | Some limit when body_length = limit -> body
-  | Some max_body_length -> (
-      let limit = max_body_length - body_length in
-      Logger.error (fun f -> f "reading body: %d" limit);
-      match Atacama.Connection.receive ~limit conn with
-      | Ok new_body ->
-          let full_body =
-            IO.Buffer.to_string body ^ IO.Buffer.to_string new_body
-            |> IO.Buffer.of_string
-          in
-          if IO.Buffer.filled full_body = max_body_length then full_body
-          else read_body conn req full_body
-      | Error _ -> failwith "body read error")
-  | None -> IO.Buffer.of_string ""
-
 let make_uri state (req : Trail.Request.t) =
   let h = Http.Header.get req.headers in
 
@@ -216,29 +197,29 @@ let make_uri state (req : Trail.Request.t) =
 
   let uri = Uri.with_path uri path in
   let uri = Uri.with_query uri query in
-  Logger.error (fun f -> f "parse uri: %a" Uri.pp uri);
+  Logger.trace (fun f -> f "http1.parse uri: %a" Uri.pp uri);
   uri
 
 let send_close res conn state =
   let res = Trail.Response.(res |> to_buffer) in
-  Logger.error (fun f -> f "response: %S" (IO.Buffer.to_string res));
+  Logger.trace (fun f -> f "http1.response: %S" (IO.Buffer.to_string res));
   let _ = Atacama.Connection.send conn res in
   Close state
 
 let bad_request conn state =
-  Logger.error (fun f -> f "bad_request");
+  Logger.trace (fun f -> f "http1.bad_request");
   send_close Trail.Response.(bad_request ()) conn state
 
 let uri_too_long conn state =
-  Logger.error (fun f -> f "uri_too_long");
+  Logger.trace (fun f -> f "http1.uri_too_long");
   send_close Trail.Response.(request_uri_too_long ()) conn state
 
 let header_fields_too_large conn state =
-  Logger.error (fun f -> f "request_header_fields_too_large");
+  Logger.trace (fun f -> f "http1.request_header_fields_too_large");
   send_close Trail.Response.(request_header_fields_too_large ()) conn state
 
 let handle_request state conn req body =
-  Logger.error (fun f -> f "handle_request: %a" Trail.Request.pp req);
+  Logger.trace (fun f -> f "http1.handle_request: %a" Trail.Request.pp req);
   let req = Trail.Request.{ req with body = Some body } in
   let is_keep_alive =
     match Http.Header.get req.headers "connection" with
@@ -247,7 +228,7 @@ let handle_request state conn req body =
   in
   match state.handler conn req with
   | Handler.Close _conn when is_keep_alive ->
-      Logger.debug (fun f -> f "connection is keep alive, continuing");
+      Logger.debug (fun f -> f "http1.connection is keep alive, continuing");
       Continue { state with sniffed_data = None }
   | Handler.Close _conn -> Close state
   | Handler.Upgrade (`websocket (upgrade_opts, handler)) ->
@@ -255,24 +236,18 @@ let handle_request state conn req body =
       let state = Ws.handshake conn state in
       Switch (H { handler = (module Ws); state })
   | Handler.Upgrade `h2c ->
-      Logger.debug (fun f -> f "upgrading to h2c");
+      Logger.debug (fun f -> f "http1.upgrading to h2c");
       let state = Http2.make ~handler:state.handler ~conn () in
       let state = Http2.handshake conn state in
       Switch (H { handler = (module Http2); state })
 
 let run_handler state conn req body =
-  Logger.error (fun f -> f "run_handler: %a" Trail.Request.pp req);
+  Logger.trace (fun f -> f "http1.run_handler: %a" Trail.Request.pp req);
   match
     let host = Http.Header.get req.headers "host" in
     let uri = make_uri state req in
-    let body = read_body conn req body in
     (req.version, host, uri, body)
   with
-  | exception
-      (( Bad_request | Bad_port | Path_missing_leading_slash
-       | Invalid_content_header ) as exn) ->
-      Logger.error (fun f -> f "bad_request: %s" (Printexc.to_string exn));
-      bad_request conn state
   | `HTTP_1_1, None, uri, body when Option.is_some (Uri.host uri) ->
       handle_request state conn { req with uri } body
   | `HTTP_1_1, Some _host, uri, body ->
@@ -281,6 +256,7 @@ let run_handler state conn req body =
   | _ -> bad_request conn state
 
 let handle_data data conn state =
+  Logger.trace (fun f -> f "http1.handling data: %a" Pid.pp (self ()));
   let data, state =
     match state.sniffed_data with
     | Some sniff ->
@@ -289,11 +265,19 @@ let handle_data data conn state =
         (IO.Buffer.of_string data, { state with sniffed_data = None })
     | None -> (data, state)
   in
-  Logger.error (fun f -> f "handling data: %S" (IO.Buffer.to_string data));
+  Logger.trace (fun f -> f "http1.handling data: %S" (IO.Buffer.to_string data));
 
-  match Parser.parse ~config:state.config data with
-  | `ok (req, body) -> run_handler state conn req body
-  | `bad_request -> bad_request conn state
-  | `uri_too_long -> uri_too_long conn state
-  | `header_fields_too_large -> header_fields_too_large conn state
-  | `more data -> Continue { state with sniffed_data = Some data }
+  match
+    match Parser.parse ~config:state.config data with
+    | `ok (req, body) -> run_handler state conn req body
+    | `bad_request -> bad_request conn state
+    | `uri_too_long -> uri_too_long conn state
+    | `header_fields_too_large -> header_fields_too_large conn state
+    | `more data -> Continue { state with sniffed_data = Some data }
+  with
+  | exception
+      (( Bad_request | Bad_port | Path_missing_leading_slash
+       | Invalid_content_header ) as exn) ->
+      Logger.trace (fun f -> f "http1.bad_request: %s" (Printexc.to_string exn));
+      bad_request conn state
+  | continue -> continue

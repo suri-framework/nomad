@@ -1,6 +1,8 @@
 open Riot
 open Trail
 
+let ( let* ) = Result.bind
+
 let deflate_string str =
   let i = De.bigstring_create De.io_buffer_size in
   let o = De.bigstring_create De.io_buffer_size in
@@ -163,3 +165,25 @@ let close conn (req : Request.t) (res : Response.t) =
   else
     let _ = Atacama.Connection.send conn (IO.Buffer.of_string "0\r\n\r\n") in
     ()
+
+let read_body ?(limit = Int.max_int) conn (req : Trail.Request.t) =
+  let max_body_length = Http1.content_length req.headers in
+  let body_length, body =
+    match req.body with
+    | Some body -> (IO.Buffer.length body, body)
+    | None -> (0, IO.Buffer.of_string "")
+  in
+  match max_body_length with
+  | Some max_body_length when body_length = max_body_length ->
+      Ok (`ok (IO.Buffer.sub ~len:limit body))
+  | Some max_body_length ->
+      let limit = Int.max 0 (Int.min limit max_body_length - body_length) in
+      Logger.error (fun f -> f "reading body: %d" limit);
+      let* new_body = Atacama.Connection.receive ~limit conn in
+      let full_body =
+        IO.Buffer.to_string body ^ IO.Buffer.to_string new_body
+        |> IO.Buffer.of_string
+      in
+      if IO.Buffer.filled full_body = max_body_length then Ok (`ok full_body)
+      else Ok (`more full_body)
+  | None -> Ok (`ok body)

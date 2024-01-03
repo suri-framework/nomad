@@ -557,7 +557,7 @@ defmodule HTTP1RequestTest do
         "POST /error_catcher HTTP/1.1\r\nhost: localhost\r\ncontent-length: 5\r\n\r\nABC"
       )
 
-      assert {:ok, "200 OK", _, "timeout"} = SimpleHTTP1Client.recv_reply(client)
+      assert {:ok, "200 OK", _, "Timeout"} = SimpleHTTP1Client.recv_reply(client)
     end
 
     def error_catcher(conn) do

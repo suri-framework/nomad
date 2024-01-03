@@ -7,7 +7,7 @@ module Test : Application.Intf = struct
   let name = "test"
 
   let start () =
-    Logger.set_log_level (Some Debug);
+    Logger.set_log_level (Some Trace);
     sleep 0.1;
     Logger.info (fun f -> f "starting nomad server");
 
@@ -104,7 +104,8 @@ module Test : Application.Intf = struct
           conn |> Conn.send_response `OK ~body
       | "expect_headers" :: _ -> conn |> Conn.send_response `OK ~body:"OK"
       | "expect_no_body" :: [] ->
-          assert (IO.Buffer.to_string conn.body = "");
+          let[@warning "-8"] (Conn.Ok (conn, body)) = Conn.read_body conn in
+          assert (IO.Buffer.to_string body = "");
           conn |> Conn.send_response `OK ~body:"OK"
       | "expect_body" :: [] ->
           let expected_content_length = "8000000" in
@@ -115,7 +116,10 @@ module Test : Application.Intf = struct
           let expected_body =
             List.init 800000 (fun _ -> "0123456789") |> String.concat ""
           in
-          let actual_body = IO.Buffer.to_string (conn.req.body |> Option.get) in
+          let[@warning "-8"] (Conn.Ok (conn, actual_body)) =
+            Conn.read_body conn
+          in
+          let actual_body = IO.Buffer.to_string actual_body in
           Logger.error (fun f ->
               f "actual_body: %d" (String.length actual_body));
           assert (String.equal content_length expected_content_length);
@@ -130,23 +134,39 @@ module Test : Application.Intf = struct
           let expected_body =
             List.init 8_000_000 (fun _ -> "a") |> String.concat ""
           in
-          let actual_body = IO.Buffer.to_string (conn.req.body |> Option.get) in
+          let[@warning "-8"] (Conn.Ok (conn, actual_body)) =
+            Conn.read_body conn
+          in
+          let actual_body = IO.Buffer.to_string actual_body in
           Logger.error (fun f ->
               f "actual_body: %d" (String.length actual_body));
           assert (String.equal content_length expected_content_length);
           assert (String.equal actual_body expected_body);
           conn |> Conn.send_response `OK ~body:"OK"
       | "read_one_byte_at_a_time" :: [] ->
-          let body = conn.req.body |> Option.map IO.Buffer.to_string in
-          conn |> Conn.send_response `OK ?body
+          let[@warning "-8"] (Conn.Ok (conn, body)) = Conn.read_body conn in
+          let body = IO.Buffer.to_string body in
+          conn |> Conn.send_response `OK ~body
+      | "error_catcher" :: [] ->
+          let[@warning "-8"] (Conn.Error (conn, reason)) =
+            Conn.read_body conn
+          in
+          let body = Format.asprintf "%a" IO.pp_err reason in
+          conn |> Conn.send_response `OK ~body
       | _ ->
-          let body = conn.req.body |> Option.map IO.Buffer.to_string in
-          conn |> Conn.send_response `Not_implemented ?body
+          let[@warning "-8"] (Conn.Ok (conn, body)) = Conn.read_body conn in
+          let body = IO.Buffer.to_string body in
+          conn |> Conn.send_response `Not_implemented ~body
     in
 
     let handler = Nomad.trail [ hello_world ] in
 
     Nomad.start_link
+      ~transport:
+        Atacama.Transport.(
+          tcp
+            ~config:{ receive_timeout = 1_000_000L; send_timeout = 1_000_000L }
+            ())
       ~config:
         (Nomad.Config.make ~max_header_count:40 ~max_header_length:5000 ())
       ~port:2112 ~handler ()

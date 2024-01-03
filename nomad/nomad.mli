@@ -5,12 +5,14 @@ module Config : sig
     max_line_request_length : int;
     max_header_count : int;
     max_header_length : int;
+    request_receive_timeout : int64;
   }
 
   val make :
     ?max_line_request_length:int ->
     ?max_header_count:int ->
     ?max_header_length:int ->
+    ?request_receive_timeout:int64 ->
     unit ->
     t
 end
