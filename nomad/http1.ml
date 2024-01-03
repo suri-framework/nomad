@@ -25,7 +25,7 @@ module Parser = struct
     let captured = Bitstring.subbitstring data 0 len in
     (captured, rest)
 
-  let rec parse ~(config:Config.t) data =
+  let rec parse ~(config : Config.t) data =
     let str = IO.Buffer.to_string data in
     let data = str |> Bitstring.bitstring_of_string in
     match do_parse ~config data with
@@ -85,7 +85,8 @@ module Parser = struct
   and header_above_limit limit acc =
     (* NOTE(@leostera:) we add 4 here since we want to consider the `: `
        between the header name and the value and the `\r\n` at the end *)
-    acc |> List.exists (fun (k, v) -> 4 + String.length k + String.length v > limit)
+    acc
+    |> List.exists (fun (k, v) -> 4 + String.length k + String.length v > limit)
 
   and do_parse_headers max_count max_length data acc =
     if List.length acc > max_count || header_above_limit max_length acc then
@@ -141,7 +142,7 @@ let handle_connection _conn state =
   Logger.info (fun f -> f "switched to http1");
   Continue state
 
-let read_body conn req body =
+let rec read_body conn req body =
   let max_body_length =
     Trail.Request.(
       req.headers |> Http.Header.get_content_range |> Option.map Int64.to_int)
@@ -149,13 +150,17 @@ let read_body conn req body =
   let body_length = IO.Buffer.length body in
   match max_body_length with
   | Some limit when body_length = limit -> body
-  | Some limit -> (
-      let limit = limit - body_length in
+  | Some max_body_length -> (
+      let limit = max_body_length - body_length in
       Logger.error (fun f -> f "reading body: %d" limit);
       match Atacama.Connection.receive ~limit conn with
-      | Ok body ->
-          Logger.error (fun f -> f "read body: %s" (IO.Buffer.to_string body));
-          body
+      | Ok new_body ->
+          let full_body =
+            IO.Buffer.to_string body ^ IO.Buffer.to_string new_body
+            |> IO.Buffer.of_string
+          in
+          if IO.Buffer.filled full_body = max_body_length then full_body
+          else read_body conn req full_body
       | Error _ -> failwith "body read error")
   | None -> IO.Buffer.of_string ""
 

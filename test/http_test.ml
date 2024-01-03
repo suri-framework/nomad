@@ -103,10 +103,24 @@ module Test : Application.Intf = struct
           let body = conn.req.version |> Http.Version.to_string in
           conn |> Conn.send_response `OK ~body
       | "expect_headers" :: _ -> conn |> Conn.send_response `OK ~body:"OK"
-      | "expect_no_body" :: [] -> 
+      | "expect_no_body" :: [] ->
           assert (IO.Buffer.to_string conn.body = "");
           conn |> Conn.send_response `OK ~body:"OK"
-
+      | "expect_body" :: [] ->
+          let expected_content_length = "8000000" in
+          let content_length =
+            Http.Header.get conn.req.headers "content-length" |> Option.get
+          in
+          Logger.error (fun f -> f "content_length: %s" content_length);
+          let expected_body =
+            List.init 800000 (fun _ -> "0123456789") |> String.concat ""
+          in
+          let actual_body = IO.Buffer.to_string (conn.req.body |> Option.get) in
+          Logger.error (fun f ->
+              f "actual_body: %d" (String.length actual_body));
+          assert (String.equal content_length expected_content_length);
+          assert (String.equal actual_body expected_body);
+          conn |> Conn.send_response `OK ~body:"OK"
       | _ ->
           let body = conn.req.body |> Option.map IO.Buffer.to_string in
           conn |> Conn.send_response `Not_implemented ?body
