@@ -103,6 +103,10 @@ module Test : Application.Intf = struct
           let body = conn.req.version |> Http.Version.to_string in
           conn |> Conn.send_response `OK ~body
       | "expect_headers" :: _ -> conn |> Conn.send_response `OK ~body:"OK"
+      | "expect_no_body" :: [] -> 
+          assert (IO.Buffer.to_string conn.body = "");
+          conn |> Conn.send_response `OK ~body:"OK"
+
       | _ ->
           let body = conn.req.body |> Option.map IO.Buffer.to_string in
           conn |> Conn.send_response `Not_implemented ?body
