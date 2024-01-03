@@ -17,7 +17,7 @@ module Test : Application.Intf = struct
       | [ "echo_method" ] ->
           let body = conn.req.meth |> Http.Method.to_string in
           conn |> Conn.send_response `OK ~body
-      | [ "echo_components" ] ->
+      | [ "*" ] | [ "echo_components" ] ->
           let scheme =
             Uri.scheme conn.req.uri |> Option.value ~default:"no-scheme"
           in
@@ -69,6 +69,14 @@ module Test : Application.Intf = struct
       | [ "send_304" ] ->
           conn |> Conn.send_response `Not_modified ~body:"bad content"
       | [ "send_401" ] -> conn |> Conn.send_response `Forbidden
+      | [ "send_stream" ] ->
+          let chunks = Seq.repeat "hello world" in
+
+          chunks
+          |> Seq.fold_left
+               (fun conn chunk -> Conn.chunk chunk conn)
+               (Conn.send_chunked `OK conn)
+          |> Conn.close
       | [ "send_chunked_200" ] ->
           conn |> Conn.send_chunked `OK |> Conn.chunk "OK" |> Conn.close
       | [ "erroring_chunk" ] ->

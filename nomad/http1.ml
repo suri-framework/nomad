@@ -7,11 +7,13 @@ let ( let* ) = Result.bind
 module Parser = struct
   exception Bad_request
   exception Need_more_data
+  exception Uri_too_long
 
-  let until char data =
+  let until ?(max_len=(-1)) char data =
     let rec go char data len =
       let left = Bitstring.bitstring_length data in
       if left = 0 then raise_notrace Need_more_data
+      else if max_len > 0 && len > max_len then raise_notrace Uri_too_long
       else
         match%bitstring data with
         | {| curr : 8 : string; rest : -1 : bitstring |} ->
@@ -22,11 +24,12 @@ module Parser = struct
     let captured = Bitstring.subbitstring data 0 len in
     (captured, rest)
 
-  let rec parse data =
+  let rec parse ~max_line_request_length data =
     let str = IO.Buffer.to_string data in
     let data = str |> Bitstring.bitstring_of_string in
-    match do_parse data with
+    match do_parse max_line_request_length data with
     | exception Bad_request -> `bad_request
+    | exception Uri_too_long -> `uri_too_long
     | exception _ -> `more str
     | req, rest ->
         let body = Bitstring.string_of_bitstring rest in
@@ -34,21 +37,21 @@ module Parser = struct
             f "parsed_request: %a -> %S" Trail.Request.pp req body);
         `ok (req, IO.Buffer.of_string body)
 
-  and do_parse data =
-    let meth, rest = parse_method data in
-    let path, rest = parse_path rest in
+  and do_parse max_len data =
+    let meth, rest = parse_method max_len data in
+    let path, rest = parse_path max_len rest in
     let version, rest = parse_protocol_version rest in
     let headers, rest = parse_headers rest in
     let req = Trail.Request.make ~meth ~version ~headers path in
     (req, rest)
 
-  and parse_method data =
-    let meth, rest = until " " data in
+  and parse_method max_len data =
+    let meth, rest = until ~max_len " " data in
     let meth = Bitstring.string_of_bitstring meth in
     (Http.Method.of_string meth, rest)
 
-  and parse_path data =
-    let path, rest = until " " data in
+  and parse_path max_len data =
+    let path, rest = until ~max_len " " data in
     (Bitstring.string_of_bitstring path, rest)
 
   and parse_protocol_version data =
@@ -112,14 +115,15 @@ type state = {
   sniffed_data : string option;
   handler : Handler.t;
   are_we_tls : bool;
+  max_line_request_length : int;
 }
 
 type error = [ `noop ]
 
 let pp_err _fmt _ = ()
 
-let make ~are_we_tls ~sniffed_data ~handler () =
-  { sniffed_data; handler; are_we_tls }
+let make ~are_we_tls ~sniffed_data ~handler ?(max_line_request_length = 8000) () =
+  { sniffed_data; handler; are_we_tls; max_line_request_length }
 
 let handle_connection _conn state =
   Logger.info (fun f -> f "switched to http1");
@@ -145,6 +149,7 @@ let read_body conn req body =
 
 exception Bad_port
 exception Path_missing_leading_slash
+exception Uri_too_long
 
 let make_uri state (req : Trail.Request.t) =
   let h = Http.Header.get req.headers in
@@ -168,7 +173,12 @@ let make_uri state (req : Trail.Request.t) =
 
   let path = Uri.path req.uri in
   let query = Uri.query req.uri in
-  if not (String.starts_with ~prefix:"/" path) then
+
+  (* If this is an OPTIONS request  it may come with a path to indicate that
+     these are global options for requests. *)
+  if req.meth = `OPTIONS && path = "*" then ()
+  (* otherwise, we expect all requests to come with a leading slash. *)
+  else if not (String.starts_with ~prefix:"/" path) then
     raise_notrace Path_missing_leading_slash;
 
   let uri = Uri.with_path uri path in
@@ -176,12 +186,22 @@ let make_uri state (req : Trail.Request.t) =
   Logger.error (fun f -> f "parse uri: %a" Uri.pp uri);
   uri
 
+
 let bad_request conn state =
   Logger.error (fun f -> f "bad_request");
   let res = Trail.Response.(bad_request () |> to_buffer) in
   Logger.error (fun f -> f "response: %S" (IO.Buffer.to_string res));
   let _ = Atacama.Connection.send conn res in
   Close state
+
+
+let uri_too_long conn state =
+  Logger.error (fun f -> f "uri_too_long");
+  let res = Trail.Response.(request_uri_too_long () |> to_buffer) in
+  Logger.error (fun f -> f "response: %S" (IO.Buffer.to_string res));
+  let _ = Atacama.Connection.send conn res in
+  Close state
+
 
 let handle_request state conn req body =
   Logger.error (fun f -> f "handle_request: %a" Trail.Request.pp req);
@@ -209,8 +229,11 @@ let handle_request state conn req body =
 
 let run_handler state conn req body =
   Logger.error (fun f -> f "run_handler: %a" Trail.Request.pp req);
-  let host = Http.Header.get req.headers "host" in
-  match (req.version, host, make_uri state req) with
+  match 
+    let host = Http.Header.get req.headers "host" in
+    let uri = make_uri state req in
+    (req.version, host, uri)
+  with
   | exception ((Bad_port | Path_missing_leading_slash) as exn) ->
       Logger.error (fun f -> f "bad_request: %s" (Printexc.to_string exn));
       bad_request conn state
@@ -232,7 +255,8 @@ let handle_data data conn state =
   in
   Logger.error (fun f -> f "handling data: %S" (IO.Buffer.to_string data));
 
-  match Parser.parse data with
+  match Parser.parse ~max_line_request_length:state.max_line_request_length data with
   | `ok (req, body) -> run_handler state conn req body
   | `bad_request -> bad_request conn state
+  | `uri_too_long -> uri_too_long conn state
   | `more data -> Continue { state with sniffed_data = Some data }

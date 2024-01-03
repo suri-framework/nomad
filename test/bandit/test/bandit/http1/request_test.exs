@@ -31,10 +31,18 @@ defmodule HTTP1RequestTest do
       context = http_server(context, http_1_options: [max_requests: 3])
       client = SimpleHTTP1Client.tcp_client(context)
 
-      SimpleHTTP1Client.send(client, "GET", "/echo_components", ["host: banana", "connection: keep-alive"])
+      SimpleHTTP1Client.send(client, "GET", "/echo_components", [
+        "host: banana",
+        "connection: keep-alive"
+      ])
+
       assert {:ok, "200 OK", _headers, _} = SimpleHTTP1Client.recv_reply(client)
 
-      SimpleHTTP1Client.send(client, "GET", "/echo_components", ["host: banana", "connection: keep-alive"])
+      SimpleHTTP1Client.send(client, "GET", "/echo_components", [
+        "host: banana",
+        "connection: keep-alive"
+      ])
+
       assert {:ok, "200 OK", _headers, _} = SimpleHTTP1Client.recv_reply(client)
 
       SimpleHTTP1Client.send(client, "GET", "/echo_components", ["host: banana"])
@@ -378,7 +386,7 @@ defmodule HTTP1RequestTest do
 
       SimpleHTTP1Client.send(client, "GET", String.duplicate("a", 5000 - 14))
 
-      assert {:ok, "414 Request-URI Too Long", _headers, <<>>} =
+      assert {:ok, "414 URI Too Long", _headers, ""} =
                SimpleHTTP1Client.recv_reply(client)
     end
   end
@@ -885,7 +893,8 @@ defmodule HTTP1RequestTest do
       assert response.headers["content-encoding"] == ["deflate"]
       assert response.headers["vary"] == ["accept-encoding"]
 
-      assert response.body == "x\xDAKL\x1C\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\n\x86>\0\0\x9F\xBB\xCD\xE3"
+      assert response.body ==
+               "x\xDAKL\x1C\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\n\x86>\0\0\x9F\xBB\xCD\xE3"
     end
 
     test "writes out a response with gzip encoding if so negotiated", context do
@@ -896,7 +905,9 @@ defmodule HTTP1RequestTest do
       assert response.headers["content-length"] == ["86"]
       assert response.headers["content-encoding"] == ["gzip"]
       assert response.headers["vary"] == ["accept-encoding"]
-      assert response.body == "\x1F\x8B\b\0\0\0\b@\x02\x03KL\x1C\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\n\x86>\0\0\x97\xD4~F\x10'\0\0" 
+
+      assert response.body ==
+               "\x1F\x8B\b\0\0\0\b@\x02\x03KL\x1C\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\n\x86>\0\0\x97\xD4~F\x10'\0\0"
     end
 
     test "writes out a response with x-gzip encoding if so negotiated", context do
@@ -907,7 +918,9 @@ defmodule HTTP1RequestTest do
       assert response.headers["content-length"] == ["86"]
       assert response.headers["content-encoding"] == ["x-gzip"]
       assert response.headers["vary"] == ["accept-encoding"]
-      assert response.body == "\x1F\x8B\b\0\0\0\b@\x02\x03KL\x1C\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\n\x86>\0\0\x97\xD4~F\x10'\0\0"
+
+      assert response.body ==
+               "\x1F\x8B\b\0\0\0\b@\x02\x03KL\x1C\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\n\x86>\0\0\x97\xD4~F\x10'\0\0"
     end
 
     test "uses the first matching encoding in accept-encoding", context do
@@ -922,7 +935,8 @@ defmodule HTTP1RequestTest do
       assert response.headers["content-encoding"] == ["deflate"]
       assert response.headers["vary"] == ["accept-encoding"]
 
-      assert response.body == "x\xDAKL\x1C\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\n\x86>\0\0\x9F\xBB\xCD\xE3"
+      assert response.body ==
+               "x\xDAKL\x1C\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\nF\xC1(\x18\x05\xA3`\x14\x8C\x82Q0\n\x86>\0\0\x9F\xBB\xCD\xE3"
     end
 
     test "falls back to no encoding if no encodings provided", context do

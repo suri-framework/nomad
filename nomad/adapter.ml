@@ -157,12 +157,9 @@ let send_file conn (req : Request.t) (res : Response.t) ?off ?len ~path () =
     let _ = Atacama.Connection.send_file conn ?off ~len (File.open_read path) in
     ()
 
-let close conn (req: Request.t) (res: Response.t) =
-(if req.meth = `HEAD then ()
-else if res.status = `No_content then ()
-else
-         let _ =
-           Atacama.Connection.send conn (IO.Buffer.of_string "0\r\n\r\n")
-         in
-         ());
-
+let close conn (req : Request.t) (res : Response.t) =
+  if req.meth = `HEAD then ()
+  else if res.status = `No_content then ()
+  else
+    let _ = Atacama.Connection.send conn (IO.Buffer.of_string "0\r\n\r\n") in
+    ()
