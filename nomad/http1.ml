@@ -133,6 +133,12 @@ type state = {
 
 type error = [ `noop ]
 
+exception Bad_port
+exception Path_missing_leading_slash
+exception Uri_too_long
+exception Bad_request
+exception Unmatched_content_headers
+
 let pp_err _fmt _ = ()
 
 let make ~are_we_tls ~sniffed_data ~handler ~config () =
@@ -142,6 +148,8 @@ let handle_connection _conn state =
   Logger.info (fun f -> f "switched to http1");
   Continue state
 
+module Int64Set = Set.Make (Int64)
+
 (* TODO(@leostera): move this to Trail.Request.content_length *)
 let content_length headers =
   match Http.Header.get headers "content-length" with
@@ -149,11 +157,12 @@ let content_length headers =
   | Some value -> (
       let values =
         String.split_on_char ',' value
-        |> List.map String.trim
-        |> List.map Int64.of_string_opt
+        |> List.map String.trim |> List.map Int64.of_string |> Int64Set.of_list
+        |> Int64Set.to_list
       in
       match values with
-      | Some first :: _ -> Some (first |> Int64.to_int)
+      | [ first ] -> Some (first |> Int64.to_int)
+      | _ :: _ -> raise Unmatched_content_headers
       | _ -> None)
 
 let rec read_body conn (req : Trail.Request.t) body =
@@ -174,10 +183,6 @@ let rec read_body conn (req : Trail.Request.t) body =
           else read_body conn req full_body
       | Error _ -> failwith "body read error")
   | None -> IO.Buffer.of_string ""
-
-exception Bad_port
-exception Path_missing_leading_slash
-exception Uri_too_long
 
 let make_uri state (req : Trail.Request.t) =
   let h = Http.Header.get req.headers in
@@ -234,7 +239,6 @@ let header_fields_too_large conn state =
 
 let handle_request state conn req body =
   Logger.error (fun f -> f "handle_request: %a" Trail.Request.pp req);
-  let body = read_body conn req body in
   let req = Trail.Request.{ req with body = Some body } in
   let is_keep_alive =
     match Http.Header.get req.headers "connection" with
@@ -261,16 +265,19 @@ let run_handler state conn req body =
   match
     let host = Http.Header.get req.headers "host" in
     let uri = make_uri state req in
-    (req.version, host, uri)
+    let body = read_body conn req body in
+    (req.version, host, uri, body)
   with
-  | exception ((Bad_port | Path_missing_leading_slash) as exn) ->
+  | exception
+      (( Bad_request | Bad_port | Path_missing_leading_slash
+       | Unmatched_content_headers ) as exn) ->
       Logger.error (fun f -> f "bad_request: %s" (Printexc.to_string exn));
       bad_request conn state
-  | `HTTP_1_1, None, uri when Option.is_some (Uri.host uri) ->
+  | `HTTP_1_1, None, uri, body when Option.is_some (Uri.host uri) ->
       handle_request state conn { req with uri } body
-  | `HTTP_1_1, Some _host, uri ->
+  | `HTTP_1_1, Some _host, uri, body ->
       handle_request state conn { req with uri } body
-  | `HTTP_1_0, _, uri -> handle_request state conn { req with uri } body
+  | `HTTP_1_0, _, uri, body -> handle_request state conn { req with uri } body
   | _ -> bad_request conn state
 
 let handle_data data conn state =
