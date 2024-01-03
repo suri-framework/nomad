@@ -8,8 +8,9 @@ module Parser = struct
   exception Bad_request
   exception Need_more_data
   exception Uri_too_long
+  exception Header_fields_too_large
 
-  let until ?(max_len=(-1)) char data =
+  let until ?(max_len = -1) char data =
     let rec go char data len =
       let left = Bitstring.bitstring_length data in
       if left = 0 then raise_notrace Need_more_data
@@ -24,12 +25,13 @@ module Parser = struct
     let captured = Bitstring.subbitstring data 0 len in
     (captured, rest)
 
-  let rec parse ~max_line_request_length data =
+  let rec parse ~(config:Config.t) data =
     let str = IO.Buffer.to_string data in
     let data = str |> Bitstring.bitstring_of_string in
-    match do_parse max_line_request_length data with
+    match do_parse ~config data with
     | exception Bad_request -> `bad_request
     | exception Uri_too_long -> `uri_too_long
+    | exception Header_fields_too_large -> `header_fields_too_large
     | exception _ -> `more str
     | req, rest ->
         let body = Bitstring.string_of_bitstring rest in
@@ -37,11 +39,13 @@ module Parser = struct
             f "parsed_request: %a -> %S" Trail.Request.pp req body);
         `ok (req, IO.Buffer.of_string body)
 
-  and do_parse max_len data =
-    let meth, rest = parse_method max_len data in
-    let path, rest = parse_path max_len rest in
+  and do_parse ~config data =
+    let meth, rest = parse_method config.max_line_request_length data in
+    let path, rest = parse_path config.max_line_request_length rest in
     let version, rest = parse_protocol_version rest in
-    let headers, rest = parse_headers rest in
+    let headers, rest =
+      parse_headers config.max_header_count config.max_header_length rest
+    in
     let req = Trail.Request.make ~meth ~version ~headers path in
     (req, rest)
 
@@ -60,7 +64,7 @@ module Parser = struct
     | {| "HTTP/1.1" : 8*8 : string; rest : -1 : bitstring |} -> (`HTTP_1_1, rest)
     | {| _ |} -> raise_notrace Bad_request
 
-  and parse_headers data =
+  and parse_headers max_count max_length data =
     match%bitstring data with
     (* we found the end of the headers *)
     | {| "\r\n\r\n" : 4 * 8 : string ; rest : -1 : bitstring |} ->
@@ -74,32 +78,40 @@ module Parser = struct
     (* we found a beginning to the headers, so we can try to parse them *)
     | {| "\r\n" : 2 * 8 : string ; rest : -1 : bitstring |} ->
         Logger.error (fun f -> f "parsing headers");
-        do_parse_headers rest []
+        do_parse_headers max_count max_length rest []
     (* anything else is probably a bad request *)
     | {| _ |} -> raise_notrace Bad_request
 
-  and do_parse_headers data acc =
-    (* we'll try to find the end of a header name *)
-    match until ":" data with
-    | exception Need_more_data -> (
-        (* if we didn't find a header name.. *)
-        match%bitstring data with
-        (* ...and the next thing we see is the end of the headers, we're good *)
-        | {| "\r\n\r\n" : 4 * 8 : string ; rest : -1 : bitstring |}
-          when List.length acc = 0 ->
-            (acc, rest)
-        (* ...or if the next thing we see a half end, and we had some headers, we're good*)
-        | {| "\r\n" : 2 * 8 : string ; rest : -1 : bitstring |}
-          when List.length acc > 0 ->
-            (acc, rest)
-        (* ...anything else is probably a bad request *)
-        | {| _ |} -> raise_notrace Bad_request)
-    | h, data ->
-        Logger.debug (fun f ->
-            f "found header %s" (Bitstring.string_of_bitstring h));
-        let header, rest = parse_header h data in
-        let acc = header :: acc in
-        do_parse_headers rest acc
+  and header_above_limit limit acc =
+    (* NOTE(@leostera:) we add 4 here since we want to consider the `: `
+       between the header name and the value and the `\r\n` at the end *)
+    acc |> List.exists (fun (k, v) -> 4 + String.length k + String.length v > limit)
+
+  and do_parse_headers max_count max_length data acc =
+    if List.length acc > max_count || header_above_limit max_length acc then
+      raise_notrace Header_fields_too_large
+    else
+      (* we'll try to find the end of a header name *)
+      match until ":" data with
+      | exception Need_more_data -> (
+          (* if we didn't find a header name.. *)
+          match%bitstring data with
+          (* ...and the next thing we see is the end of the headers, we're good *)
+          | {| "\r\n\r\n" : 4 * 8 : string ; rest : -1 : bitstring |}
+            when List.length acc = 0 ->
+              (acc, rest)
+          (* ...or if the next thing we see a half end, and we had some headers, we're good*)
+          | {| "\r\n" : 2 * 8 : string ; rest : -1 : bitstring |}
+            when List.length acc > 0 ->
+              (acc, rest)
+          (* ...anything else is probably a bad request *)
+          | {| _ |} -> raise_notrace Bad_request)
+      | h, data ->
+          Logger.debug (fun f ->
+              f "found header %s" (Bitstring.string_of_bitstring h));
+          let header, rest = parse_header h data in
+          let acc = header :: acc in
+          do_parse_headers max_count max_length rest acc
 
   and parse_header h rest =
     let clean s =
@@ -115,15 +127,15 @@ type state = {
   sniffed_data : string option;
   handler : Handler.t;
   are_we_tls : bool;
-  max_line_request_length : int;
+  config : Config.t;
 }
 
 type error = [ `noop ]
 
 let pp_err _fmt _ = ()
 
-let make ~are_we_tls ~sniffed_data ~handler ?(max_line_request_length = 8000) () =
-  { sniffed_data; handler; are_we_tls; max_line_request_length }
+let make ~are_we_tls ~sniffed_data ~handler ~config () =
+  { sniffed_data; handler; are_we_tls; config }
 
 let handle_connection _conn state =
   Logger.info (fun f -> f "switched to http1");
@@ -177,7 +189,7 @@ let make_uri state (req : Trail.Request.t) =
   (* If this is an OPTIONS request  it may come with a path to indicate that
      these are global options for requests. *)
   if req.meth = `OPTIONS && path = "*" then ()
-  (* otherwise, we expect all requests to come with a leading slash. *)
+    (* otherwise, we expect all requests to come with a leading slash. *)
   else if not (String.starts_with ~prefix:"/" path) then
     raise_notrace Path_missing_leading_slash;
 
@@ -186,22 +198,23 @@ let make_uri state (req : Trail.Request.t) =
   Logger.error (fun f -> f "parse uri: %a" Uri.pp uri);
   uri
 
+let send_close res conn state =
+  let res = Trail.Response.(res |> to_buffer) in
+  Logger.error (fun f -> f "response: %S" (IO.Buffer.to_string res));
+  let _ = Atacama.Connection.send conn res in
+  Close state
 
 let bad_request conn state =
   Logger.error (fun f -> f "bad_request");
-  let res = Trail.Response.(bad_request () |> to_buffer) in
-  Logger.error (fun f -> f "response: %S" (IO.Buffer.to_string res));
-  let _ = Atacama.Connection.send conn res in
-  Close state
-
+  send_close Trail.Response.(bad_request ()) conn state
 
 let uri_too_long conn state =
   Logger.error (fun f -> f "uri_too_long");
-  let res = Trail.Response.(request_uri_too_long () |> to_buffer) in
-  Logger.error (fun f -> f "response: %S" (IO.Buffer.to_string res));
-  let _ = Atacama.Connection.send conn res in
-  Close state
+  send_close Trail.Response.(request_uri_too_long ()) conn state
 
+let header_fields_too_large conn state =
+  Logger.error (fun f -> f "request_header_fields_too_large");
+  send_close Trail.Response.(request_header_fields_too_large ()) conn state
 
 let handle_request state conn req body =
   Logger.error (fun f -> f "handle_request: %a" Trail.Request.pp req);
@@ -229,7 +242,7 @@ let handle_request state conn req body =
 
 let run_handler state conn req body =
   Logger.error (fun f -> f "run_handler: %a" Trail.Request.pp req);
-  match 
+  match
     let host = Http.Header.get req.headers "host" in
     let uri = make_uri state req in
     (req.version, host, uri)
@@ -255,8 +268,9 @@ let handle_data data conn state =
   in
   Logger.error (fun f -> f "handling data: %S" (IO.Buffer.to_string data));
 
-  match Parser.parse ~max_line_request_length:state.max_line_request_length data with
+  match Parser.parse ~config:state.config data with
   | `ok (req, body) -> run_handler state conn req body
   | `bad_request -> bad_request conn state
   | `uri_too_long -> uri_too_long conn state
+  | `header_fields_too_large -> header_fields_too_large conn state
   | `more data -> Continue { state with sniffed_data = Some data }

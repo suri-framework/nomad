@@ -15,7 +15,7 @@ let sniff_wire conn =
   | "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n" -> Ok `http2
   | data -> Ok (`no_match data)
 
-let negotiated_protocol ~enabled_protocols conn handler =
+let negotiated_protocol ~enabled_protocols ~config conn handler =
   let enabled proto = List.mem proto enabled_protocols in
   let* wire = sniff_wire conn in
   let alpn = alpn_protocol conn in
@@ -28,7 +28,8 @@ let negotiated_protocol ~enabled_protocols conn handler =
       let are_we_tls = alpn = `http1 in
       Logger.error (fun f -> f " http1 detected! ");
       let state =
-        Protocol.Http1.make ~are_we_tls ~sniffed_data:(Some data) ~handler ()
+        Protocol.Http1.make ~config ~are_we_tls ~sniffed_data:(Some data)
+          ~handler ()
       in
       Ok (H { handler = (module Protocol.Http1); state })
   | _ -> Error `No_protocol_matched

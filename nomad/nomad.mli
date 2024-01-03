@@ -1,5 +1,20 @@
 open Trail
 
+module Config : sig
+  type t = {
+    max_line_request_length : int;
+    max_header_count : int;
+    max_header_length : int;
+  }
+
+  val make :
+    ?max_line_request_length:int ->
+    ?max_header_count:int ->
+    ?max_header_length:int ->
+    unit ->
+    t
+end
+
 module Handler : sig
   type response =
     | Close of Atacama.Connection.t
@@ -11,6 +26,7 @@ end
 val start_link :
   ?acceptor_count:int ->
   ?transport:Atacama.Transport.t ->
+  ?config:Config.t ->
   port:int ->
   handler:Handler.t ->
   unit ->

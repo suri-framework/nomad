@@ -102,6 +102,7 @@ module Test : Application.Intf = struct
       | [ "report_version" ] ->
           let body = conn.req.version |> Http.Version.to_string in
           conn |> Conn.send_response `OK ~body
+      | "expect_headers" :: _ -> conn |> Conn.send_response `OK ~body:"OK"
       | _ ->
           let body = conn.req.body |> Option.map IO.Buffer.to_string in
           conn |> Conn.send_response `Not_implemented ?body
@@ -109,7 +110,10 @@ module Test : Application.Intf = struct
 
     let handler = Nomad.trail [ hello_world ] in
 
-    Nomad.start_link ~port:2112 ~handler ()
+    Nomad.start_link
+      ~config:
+        (Nomad.Config.make ~max_header_count:40 ~max_header_length:5000 ())
+      ~port:2112 ~handler ()
 end
 
 let () = Riot.start ~apps:[ (module Logger); (module Test) ] ()
