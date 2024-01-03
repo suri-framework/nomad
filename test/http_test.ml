@@ -151,7 +151,13 @@ module Test : Application.Intf = struct
           let[@warning "-8"] (Conn.Error (conn, reason)) =
             Conn.read_body conn
           in
-          let body = Format.asprintf "%a" IO.pp_err reason in
+          let body =
+            match reason with
+            | `Excess_body_read -> "Excess_body_read"
+            | ( `Closed | `Process_down | `Timeout
+              | `Unix_error _ ) as reason ->
+                Format.asprintf "%a" IO.pp_err reason
+          in
           conn |> Conn.send_response `OK ~body
       | _ ->
           let[@warning "-8"] (Conn.Ok (conn, body)) = Conn.read_body conn in
@@ -165,7 +171,7 @@ module Test : Application.Intf = struct
       ~transport:
         Atacama.Transport.(
           tcp
-            ~config:{ receive_timeout = 1_000_000L; send_timeout = 1_000_000L }
+            ~config:{ receive_timeout = 5_000_000L; send_timeout = 5_000_000L }
             ())
       ~config:
         (Nomad.Config.make ~max_header_count:40 ~max_header_length:5000 ())

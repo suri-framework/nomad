@@ -575,7 +575,7 @@ defmodule HTTP1RequestTest do
         "POST /error_catcher HTTP/1.1\r\nhost: localhost\r\ncontent-length: 3\r\n\r\nABCDE"
       )
 
-      assert {:ok, "200 OK", _, "excess_body_read"} = SimpleHTTP1Client.recv_reply(client)
+      assert {:ok, "200 OK", _, "Excess_body_read"} = SimpleHTTP1Client.recv_reply(client)
     end
 
     test "reading request body multiple times works as expected", context do
