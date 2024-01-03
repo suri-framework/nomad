@@ -142,11 +142,22 @@ let handle_connection _conn state =
   Logger.info (fun f -> f "switched to http1");
   Continue state
 
-let rec read_body conn req body =
-  let max_body_length =
-    Trail.Request.(
-      req.headers |> Http.Header.get_content_range |> Option.map Int64.to_int)
-  in
+(* TODO(@leostera): move this to Trail.Request.content_length *)
+let content_length headers =
+  match Http.Header.get headers "content-length" with
+  | None -> None
+  | Some value -> (
+      let values =
+        String.split_on_char ',' value
+        |> List.map String.trim
+        |> List.map Int64.of_string_opt
+      in
+      match values with
+      | Some first :: _ -> Some (first |> Int64.to_int)
+      | _ -> None)
+
+let rec read_body conn (req : Trail.Request.t) body =
+  let max_body_length = content_length req.headers in
   let body_length = IO.Buffer.length body in
   match max_body_length with
   | Some limit when body_length = limit -> body
