@@ -1,6 +1,12 @@
 open Riot
 open Trail
 
+module Logger = Logger.Make (struct
+  let namespace = [ "nomad"; "http1"; "adapter" ]
+end)
+
+open Logger
+
 let ( let* ) = Result.bind
 
 let deflate_string str =
@@ -49,7 +55,6 @@ let gzip buf = gzip_string (IO.Buffer.to_string buf) |> IO.Buffer.of_string
 
 let deflate buf =
   let str = deflate_string (IO.Buffer.to_string buf) in
-  Logger.error (fun f -> f "deflate: %S" str);
   str |> IO.Buffer.of_string
 
 let has_custom_content_encoding (res : Response.t) =
@@ -73,7 +78,7 @@ let has_no_transform (res : Response.t) =
 let maybe_compress (req : Request.t) buf =
   if IO.Buffer.length buf = 0 then (None, None)
   else (
-    Logger.debug (fun f -> f "body: %s" (IO.Buffer.to_string buf));
+    debug (fun f -> f "body: %s" (IO.Buffer.to_string buf));
     let accepted_encodings =
       Http.Header.get req.headers "accept-encoding"
       |> Option.map (fun enc -> String.split_on_char ',' enc)
@@ -94,11 +99,8 @@ let send conn (req : Request.t) (res : Response.t) =
       if
         has_custom_content_encoding res
         || has_strong_etag res || has_no_transform res
-      then (res.body, None)
-      else
-        match res.body with
-        | Some body -> maybe_compress req body
-        | None -> (None, None)
+      then (Some res.body, None)
+      else maybe_compress req res.body
     in
     let headers =
       match encoding with
@@ -106,18 +108,62 @@ let send conn (req : Request.t) (res : Response.t) =
       | None -> res.headers
     in
     let headers = Http.Header.add headers "vary" "accept-encoding" in
+    let is_chunked =
+      Http.Header.get_transfer_encoding headers = Http.Transfer.Chunked
+    in
 
-    let content_length =
-      Option.map IO.Buffer.filled body |> Option.value ~default:0
+    let body_len =
+      Option.map IO.Buffer.filled body
+      |> Option.value ~default:0 |> Int.to_string
     in
     let headers =
-      if res.status = `No_content then
-        Http.Header.remove headers "content-length"
-      else if res.status != `Not_modified && content_length > 0 then
-        Http.Header.replace headers "content-length"
-          (Int.to_string content_length)
-      else headers
+      let content_length = Http.Header.get headers "content-length" in
+      match (content_length, res.status) with
+      | _, (`No_content | `Not_modified) ->
+          Http.Header.remove headers "content-length"
+      | None, _ when not is_chunked ->
+          Http.Header.replace headers "content-length" body_len
+      | _ -> headers
     in
+
+    let headers =
+      match Http.Header.get headers "date" with
+      | Some _ -> headers
+      | None ->
+          let now = Ptime_clock.now () in
+          let (y, mon, d), ((h, m, s), _ns) = Ptime.to_date_time now in
+          let day =
+            match Ptime.weekday ?tz_offset_s:None now with
+            | `Sat -> "Sat"
+            | `Fri -> "Fri"
+            | `Mon -> "Mon"
+            | `Wed -> "Wed"
+            | `Tue -> "Tue"
+            | `Sun -> "Sun"
+            | `Thu -> "Thu"
+          in
+          let[@warning "-8"] mon =
+            match mon with
+            | 0 -> "Jan"
+            | 1 -> "Feb"
+            | 2 -> "Mar"
+            | 3 -> "Apr"
+            | 4 -> "May"
+            | 5 -> "Jun"
+            | 6 -> "Jul"
+            | 7 -> "Aug"
+            | 8 -> "Sep"
+            | 9 -> "Oct"
+            | 10 -> "Nov"
+            | 11 -> "Dec"
+          in
+          let now =
+            Format.sprintf "%s, %02d %s %d %02d:%02d:%02d GMT" day d mon y h m s
+          in
+          Logger.debug (fun f -> f "Adding date header: %S" now);
+          Http.Header.add headers "date" now
+    in
+
     let body =
       if
         req.meth = `HEAD || res.status = `No_content
@@ -126,21 +172,44 @@ let send conn (req : Request.t) (res : Response.t) =
       else body
     in
 
-    let buf = Response.to_buffer { res with headers; body } in
-    Logger.debug (fun f -> f "res: %S" (IO.Buffer.to_string buf));
+    let buf =
+      let version =
+        res.version |> Http.Version.to_string |> Httpaf.Version.of_string
+      in
+      let status = res.status |> Http.Status.to_int |> Httpaf.Status.of_code in
+      let headers = headers |> Http.Header.to_list |> Httpaf.Headers.of_list in
+      let res = Httpaf.Response.create ~version ~headers status in
+      let buf = Faraday.create (1024 * 4) in
+      Httpaf.Httpaf_private.Serialize.write_response buf res;
+
+      (match body with
+      | Some body -> Faraday.write_string buf (IO.Buffer.to_string body)
+      | _ -> ());
+
+      let s = Faraday.serialize_to_string buf in
+      IO.Buffer.of_string s
+    in
+
+    debug (fun f -> f "res: %S" (IO.Buffer.to_string buf));
     let _ = Atacama.Connection.send conn buf in
     ()
 
 let send_chunk conn (req : Request.t) buf =
-  if req.meth != `HEAD then (
+  if req.meth = `HEAD then ()
+  else
     let chunk =
       Format.sprintf "%x\r\n%s\r\n" (IO.Buffer.filled buf)
         (IO.Buffer.to_string buf)
     in
-    Logger.debug (fun f -> f "sending chunk: %S" chunk);
+    debug (fun f -> f "sending chunk: %S" chunk);
     let chunk = IO.Buffer.of_string chunk in
     let _ = Atacama.Connection.send conn chunk in
-    ())
+    ()
+
+let close_chunk conn =
+  let chunk = IO.Buffer.of_string "0\r\n\r\n" in
+  let _ = Atacama.Connection.send conn chunk in
+  ()
 
 let send_file conn (req : Request.t) (res : Response.t) ?off ?len ~path () =
   let len =
@@ -153,9 +222,12 @@ let send_file conn (req : Request.t) (res : Response.t) ?off ?len ~path () =
   let headers =
     Http.Header.replace res.headers "content-length" (Int.to_string len)
   in
-  let res = { res with headers; body = None } in
+  let res = { res with headers; body = IO.Buffer.empty } in
   let _ = send conn req res in
-  if res.status != `No_content then
+  if
+    req.meth != `HEAD && res.status != `No_content
+    && res.status != `Not_modified
+  then
     let _ = Atacama.Connection.send_file conn ?off ~len (File.open_read path) in
     ()
 
@@ -166,24 +238,123 @@ let close conn (req : Request.t) (res : Response.t) =
     let _ = Atacama.Connection.send conn (IO.Buffer.of_string "0\r\n\r\n") in
     ()
 
-let read_body ?(limit = Int.max_int) conn (req : Trail.Request.t) =
-  let max_body_length = Http1.content_length req.headers in
-  let body_length, body =
-    match req.body with
-    | Some body -> (IO.Buffer.length body, body)
-    | None -> (0, IO.Buffer.of_string "")
-  in
-  match max_body_length with
-  | Some max_body_length when body_length = max_body_length ->
-      Ok (`ok (IO.Buffer.sub ~len:limit body))
-  | Some max_body_length ->
-      let limit = Int.max 0 (Int.min limit max_body_length - body_length) in
-      Logger.error (fun f -> f "reading body: %d" limit);
-      let* new_body = Atacama.Connection.receive ~limit conn in
-      let full_body =
-        IO.Buffer.to_string body ^ IO.Buffer.to_string new_body
-        |> IO.Buffer.of_string
+open Trail
+
+let rec read_body ?limit ?(read_size = 1_024 * 1_024) conn (req : Request.t) =
+  match Request.body_encoding req with
+  | Http.Transfer.Chunked -> (
+      debug (fun f -> f "reading chunked body");
+      match
+        read_chunked_body ~read_size ~buffer:req.buffer ~body:IO.Buffer.empty
+          conn req
+      with
+      | Ok (body, buffer) ->
+          debug (fun f ->
+              f "read chunked_body: buffer=%d" (IO.Buffer.filled buffer));
+          Adapter.Ok ({ req with buffer }, body)
+      | Error reason -> Adapter.Error (req, reason))
+  | _ -> (
+      debug (fun f -> f "reading content-length body");
+      match read_content_length_body ?limit ~read_size conn req with
+      | Ok (body, buffer, body_remaining) ->
+          debug (fun f ->
+              f "read chunked_body: body_remaning=%d buffer=%d" body_remaining
+                (IO.Buffer.filled buffer));
+          let req = { req with buffer; body_remaining } in
+          if body_remaining = 0 && IO.Buffer.filled buffer = 0 then (
+            debug (fun f -> f "read chunked_body: ok");
+            let req = { req with buffer; body_remaining = -1 } in
+            Adapter.Ok (req, body))
+          else (
+            debug (fun f -> f "read chunked_body: more");
+            Adapter.More (req, body))
+      | Error reason -> Adapter.Error (req, reason))
+
+and read_chunked_body ~read_size ~buffer ~body conn req =
+  let parts = IO.Buffer.split ~max:1 buffer ~on:"\r\n" in
+  debug (fun f -> f "body_size: %d" (IO.Buffer.length body));
+  debug (fun f -> f "buffer: %d" (IO.Buffer.length buffer));
+  debug (fun f ->
+      f "total_read: %d" (IO.Buffer.length buffer + IO.Buffer.length body));
+  debug (fun f ->
+      match parts with
+      | size :: _ -> f "chunk_size: 0x%s" (IO.Buffer.to_string size)
+      | _ -> ());
+
+  match parts with
+  | [ zero; _ ] when String.equal (IO.Buffer.to_string zero) "0" ->
+      debug (fun f -> f "read_chunked_body: last chunk!");
+      Ok (body, buffer)
+  | [ chunk_size; chunk_data ] -> (
+      let chunk_size =
+        Int64.(of_string ("0x" ^ IO.Buffer.to_string chunk_size) |> to_int)
       in
-      if IO.Buffer.filled full_body = max_body_length then Ok (`ok full_body)
-      else Ok (`more full_body)
-  | None -> Ok (`ok body)
+      debug (fun f -> f "read_chunked_body: chunk_size=%d" chunk_size);
+      let binstr_data = IO.Buffer.to_string chunk_data in
+      debug (fun f ->
+          f "read_chunked_body: (%d bytes)" (String.length binstr_data));
+      let binstr_data = binstr_data |> Bitstring.bitstring_of_string in
+      match%bitstring binstr_data with
+      | {| next_chunk : (chunk_size * 8) : string ;
+           "\r\n" : 2 * 8 : string ;
+           rest : -1 : bitstring |}
+        ->
+          debug (fun f -> f "read_chunked_body: read full chunk");
+          debug (fun f ->
+              f "read_chunked_body: rest=%d" (Bitstring.bitstring_length rest));
+          let rest = IO.Buffer.of_string (Bitstring.string_of_bitstring rest) in
+          let next_chunk = IO.Buffer.of_string next_chunk in
+          let body = IO.Buffer.concat body next_chunk in
+          read_chunked_body ~read_size ~buffer:rest ~body conn req
+      | {| _ |} ->
+          let left_to_read = chunk_size - IO.Buffer.length chunk_data in
+          debug (fun f ->
+              f "read_chunked_body: reading more data left_to_read=%d"
+                left_to_read);
+          let* chunk =
+            if left_to_read > 0 then read ~to_read:left_to_read ~read_size conn
+            else Atacama.Connection.receive conn
+          in
+          let buffer = IO.Buffer.concat buffer chunk in
+          read_chunked_body ~read_size ~buffer ~body conn req)
+  | _ ->
+      debug (fun f -> f "read_chunked_body: need more data");
+      let* chunk = Atacama.Connection.receive conn in
+      let buffer = IO.Buffer.concat buffer chunk in
+      read_chunked_body ~read_size ~buffer ~body conn req
+
+and read_content_length_body ?limit ~read_size conn req =
+  let buffer = req.buffer in
+  let limit = Option.value ~default:req.body_remaining limit in
+  let to_read = limit - IO.Buffer.length buffer in
+  debug (fun f ->
+      f "read_content_length_body: up to limit=%d with preread_buffer=%d" limit
+        (IO.Buffer.length buffer));
+  match req.body_remaining with
+  | n when n < 0 || to_read < 0 ->
+      debug (fun f -> f "read_content_length_body: excess body");
+      Error `Excess_body_read
+  | 0 when IO.Buffer.length buffer >= limit ->
+      debug (fun f -> f "read_content_length_body: can answer with buffer");
+      let len = Int.min limit (IO.Buffer.length buffer) in
+      let body = IO.Buffer.sub ~len buffer in
+      Ok (body, IO.Buffer.empty, 0)
+  | remaining_bytes ->
+      let to_read = Int.min (limit - IO.Buffer.length buffer) remaining_bytes in
+      debug (fun f -> f "read_content_length_body: need to read %d" to_read);
+      let* chunk = read ~to_read ~read_size conn in
+      let body = IO.Buffer.concat buffer chunk in
+      let body_remaining = remaining_bytes - IO.Buffer.length body in
+      Ok (body, IO.Buffer.empty, body_remaining)
+
+and read ~read_size ~to_read ?(buffer = IO.Buffer.empty) conn =
+  if to_read = 0 then Ok IO.Buffer.empty
+  else
+    let* chunk = Atacama.Connection.receive ~limit:to_read ~read_size conn in
+    let remaining_bytes = to_read - IO.Buffer.length chunk in
+    let buffer = IO.Buffer.concat buffer chunk in
+    debug (fun f -> f "read: remaining_bytes %d" remaining_bytes);
+    debug (fun f -> f "read: buffer=%d" (IO.Buffer.length buffer));
+    if remaining_bytes > 0 then
+      read ~read_size ~to_read:remaining_bytes ~buffer conn
+    else Ok buffer

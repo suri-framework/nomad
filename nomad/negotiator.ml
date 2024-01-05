@@ -1,6 +1,10 @@
 open Riot
 open Atacama.Handler
 
+module Logger = Logger.Make (struct
+  let namespace = [ "nomad"; "negotiator" ]
+end)
+
 let ( let* ) = Result.bind
 
 let alpn_protocol conn =

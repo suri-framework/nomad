@@ -2,6 +2,10 @@ open Riot
 open Atacama.Handler
 include Atacama.Handler.Default
 
+module Logger = Logger.Make (struct
+  let namespace = [ "nomad"; "http2" ]
+end)
+
 let ( let* ) = Result.bind
 
 module H2_stream = struct
@@ -111,18 +115,15 @@ let make ?(settings = default_settings) ~handler ~conn () =
     streams = Hashtbl.create 128;
   }
 
-let[@warning "-8"] handshake conn state =
+let handshake req conn state =
   let res =
     Trail.Response.(
       make `Switching_protocols
         ~headers:[ ("upgrade", "h2c"); ("connection", "Upgrade") ]
-        ()
-      |> to_buffer)
+        ())
   in
-
-  match Atacama.Connection.send conn res with
-  | Ok _n -> state
-  | _ -> failwith "could not handshake"
+  Adapter.send conn req res;
+  state
 
 let handle_connection conn state =
   Logger.debug (fun f -> f "switched to http2");

@@ -2,6 +2,10 @@ open Riot
 open Atacama.Handler
 include Atacama.Handler.Default
 
+module Logger = Logger.Make (struct
+  let namespace = [ "nomad"; "ws" ]
+end)
+
 let ( let* ) = Result.bind
 
 type state = {
@@ -19,9 +23,10 @@ let pp_err _fmt _ = ()
 let make ~upgrade_opts ~handler ~req ~conn () =
   { upgrade_opts; handler; req; buffer = IO.Buffer.with_capacity 4096; conn }
 
-let[@warning "-8"] handshake conn state =
-  let req = state.req in
-  let (Some client_key) = Http.Header.get req.headers "sec-websocket-key" in
+let handshake (req : Trail.Request.t) conn state =
+  let[@warning "-8"] (Some client_key) =
+    Http.Header.get req.headers "sec-websocket-key"
+  in
   let concatenated_key = client_key ^ "258EAFA5-E914-47DA-95CA-C5AB0DC85B11" in
   let hashed_key =
     Digestif.SHA1.(digest_string concatenated_key |> to_raw_string)
@@ -37,13 +42,11 @@ let[@warning "-8"] handshake conn state =
             ("connection", "Upgrade");
             ("sec-websocket-accept", server_key);
           ]
-        ()
-      |> to_buffer)
+        ())
   in
 
-  match Atacama.Connection.send conn res with
-  | Ok _n -> state
-  | _ -> failwith "could not handshake"
+  Adapter.send conn req res;
+  state
 
 let handle_connection conn state =
   Logger.debug (fun f -> f "switched to ws");
