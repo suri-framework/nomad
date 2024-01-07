@@ -4,14 +4,12 @@ open Riot
 open Trail
 
 module Test : Application.Intf = struct
-  let name = "test"
-
   let start () =
     Logger.set_log_level (Some Debug);
     sleep 0.1;
     Logger.info (fun f -> f "starting nomad server");
 
-    let hello_world conn = conn |> Conn.send_response `OK ~body:"hello world" in
+    let hello_world conn = conn |> Conn.send_response `OK "hello world" in
 
     let handler = Nomad.trail [ hello_world ] in
 

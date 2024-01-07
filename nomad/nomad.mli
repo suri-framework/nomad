@@ -26,7 +26,7 @@ module Handler : sig
 end
 
 val start_link :
-  ?acceptor_count:int ->
+  ?acceptors:int ->
   ?transport:Atacama.Transport.t ->
   ?config:Config.t ->
   port:int ->

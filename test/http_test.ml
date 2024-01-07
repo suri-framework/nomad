@@ -8,8 +8,6 @@ module Logger = Logger.Make (struct
 end)
 
 module Test : Application.Intf = struct
-  let name = "test"
-
   let start () =
     Logger.set_log_level (Some Trace);
     sleep 0.1;
@@ -21,7 +19,7 @@ module Test : Application.Intf = struct
       match conn.req.path with
       | [ "echo_method" ] ->
           let body = conn.req.meth |> Http.Method.to_string in
-          conn |> Conn.send_response `OK ~body
+          conn |> Conn.send_response `OK body
       | [ "*" ] when conn.req.meth = `OPTIONS ->
           let scheme =
             Uri.scheme conn.req.uri |> Option.value ~default:"no-scheme"
@@ -43,14 +41,14 @@ module Test : Application.Intf = struct
               }|}
               scheme host port path query
           in
-          conn |> Conn.send_response `OK ~body
+          conn |> Conn.send_response `OK body
       | [ "peer_data" ] ->
           let Conn.{ ip; port } = conn.peer in
           let body =
             Format.sprintf {|{ "address": "%s", "port": %d }|}
               (Net.Addr.to_string ip) port
           in
-          conn |> Conn.send_response `OK ~body
+          conn |> Conn.send_response `OK body
       | [ "echo_components" ] ->
           let scheme =
             Uri.scheme conn.req.uri |> Option.value ~default:"no-scheme"
@@ -72,37 +70,37 @@ module Test : Application.Intf = struct
               }|}
               scheme host port path query
           in
-          conn |> Conn.send_response `OK ~body
+          conn |> Conn.send_response `OK body
       | [ "send_big_body" ] ->
           let body = String.make 10_000 'a' in
-          conn |> Conn.send_response `OK ~body
+          conn |> Conn.send_response `OK body
       | [ "send_content_encoding" ] ->
           conn
           |> Conn.with_header "content-encoding" "deflate"
-          |> Conn.send_response `OK ~body:(String.make 10_000 'a')
+          |> Conn.send_response `OK (String.make 10_000 'a')
       | [ "send_strong_etag" ] ->
           conn
           |> Conn.with_header "etag" "\"1234\""
-          |> Conn.send_response `OK ~body:(String.make 10_000 'a')
+          |> Conn.send_response `OK (String.make 10_000 'a')
       | [ "send_weak_etag" ] ->
           conn
           |> Conn.with_header "etag" "W/\"1234\""
-          |> Conn.send_response `OK ~body:(String.make 10_000 'a')
+          |> Conn.send_response `OK (String.make 10_000 'a')
       | [ "send_no_transform" ] ->
           conn
           |> Conn.with_header "cache-control" "no-transform"
-          |> Conn.send_response `OK ~body:(String.make 10_000 'a')
+          |> Conn.send_response `OK (String.make 10_000 'a')
       | [ "send_incorrect_content_length" ] ->
           conn
           |> Conn.with_header "content-length" "10001"
-          |> Conn.send_response `OK ~body:(String.make 10_000 'a')
-      | [ "send_200" ] -> conn |> Conn.send_response `OK
+          |> Conn.send_response `OK (String.make 10_000 'a')
+      | [ "send_200" ] -> conn |> Conn.send_status `OK
       | [ "send_204" ] ->
-          conn |> Conn.send_response `No_content ~body:"bad content"
-      | [ "send_301" ] -> conn |> Conn.send_response `Moved_permanently
+          conn |> Conn.send_response `No_content "bad content"
+      | [ "send_301" ] -> conn |> Conn.send_status `Moved_permanently
       | [ "send_304" ] ->
-          conn |> Conn.send_response `Not_modified ~body:"bad content"
-      | [ "send_401" ] -> conn |> Conn.send_response `Unauthorized
+          conn |> Conn.send_response `Not_modified "bad content"
+      | [ "send_401" ] -> conn |> Conn.send_status `Unauthorized
       | [ "send_stream" ] ->
           let chunks = Seq.repeat "hello world" in
 
@@ -135,15 +133,15 @@ module Test : Application.Intf = struct
       | [ "send_inform" ] ->
           conn
           |> Conn.inform `Continue [ ("x-from", "inform") ]
-          |> Conn.send_response `OK ~body:"Informer"
+          |> Conn.send_response `OK "Informer"
       | [ "report_version" ] ->
           let body = conn.req.version |> Http.Version.to_string in
-          conn |> Conn.send_response `OK ~body
-      | "expect_headers" :: _ -> conn |> Conn.send_response `OK ~body:"OK"
+          conn |> Conn.send_response `OK body
+      | "expect_headers" :: _ -> conn |> Conn.send_response `OK "OK"
       | "expect_no_body" :: [] ->
           let[@warning "-8"] (Conn.Ok (conn, body)) = Conn.read_body conn in
           assert (IO.Buffer.to_string body = "");
-          conn |> Conn.send_response `OK ~body:"OK"
+          conn |> Conn.send_response `OK "OK"
       | "expect_body" :: [] ->
           let expected_content_length = "8000000" in
           let content_length =
@@ -158,10 +156,10 @@ module Test : Application.Intf = struct
           in
           let actual_body = IO.Buffer.to_string actual_body in
           Logger.debug (fun f ->
-              f "actual_body: %d" (String.length actual_body));
+              f "actual_ %d" (String.length actual_body));
           assert (String.equal content_length expected_content_length);
           assert (String.equal actual_body expected_body);
-          conn |> Conn.send_response `OK ~body:"OK"
+          conn |> Conn.send_response `OK "OK"
       | "expect_body_with_multiple_content_length" :: [] ->
           let expected_content_length = "8000000,8000000,8000000" in
           let content_length =
@@ -176,16 +174,16 @@ module Test : Application.Intf = struct
           in
           let actual_body = IO.Buffer.to_string actual_body in
           Logger.debug (fun f ->
-              f "actual_body: %d" (String.length actual_body));
+              f "actual_ %d" (String.length actual_body));
           assert (String.equal content_length expected_content_length);
           assert (String.equal actual_body expected_body);
-          conn |> Conn.send_response `OK ~body:"OK"
+          conn |> Conn.send_response `OK "OK"
       | "read_one_byte_at_a_time" :: [] ->
           let[@warning "-8"] (Conn.Ok (conn, body)) =
             Conn.read_body ~limit:5 conn
           in
           let body = IO.Buffer.to_string body in
-          conn |> Conn.send_response `OK ~body
+          conn |> Conn.send_response `OK body
       | "error_catcher" :: [] ->
           let[@warning "-8"] (Conn.Error (conn, reason)) =
             Conn.read_body conn
@@ -196,7 +194,7 @@ module Test : Application.Intf = struct
             | (`Closed | `Process_down | `Timeout | `Unix_error _) as reason ->
                 Format.asprintf "%a" IO.pp_err reason
           in
-          conn |> Conn.send_response `OK ~body
+          conn |> Conn.send_response `OK body
       | "multiple_body_read" :: [] ->
           Logger.debug (fun f -> f "multiple_body_read");
           Logger.debug (fun f ->
@@ -210,8 +208,8 @@ module Test : Application.Intf = struct
           Logger.debug (fun f ->
               f "multiple_body_read: %d" conn.req.body_remaining);
           let body = IO.Buffer.to_string body in
-          Logger.debug (fun f -> f "body: %s" body);
-          conn |> Conn.send_response `OK ~body
+          Logger.debug (fun f -> f " %s" body);
+          conn |> Conn.send_response `OK body
       | "expect_chunked_body" :: [] ->
           let transfer_encoding =
             Http.Header.get conn.req.headers "transfer-encoding" |> Option.get
@@ -224,21 +222,21 @@ module Test : Application.Intf = struct
             List.init 8_000_000 (fun _ -> "a") |> String.concat ""
           in
           Logger.debug (fun f ->
-              f "actual_body: %d" (String.length actual_body));
+              f "actual_ %d" (String.length actual_body));
           assert (String.equal transfer_encoding "chunked");
           assert (String.equal actual_body expected_body);
-          conn |> Conn.send_response `OK ~body:"OK"
+          conn |> Conn.send_response `OK "OK"
       | [ "upgrade_websocket" ] -> conn |> Conn.upgrade (Obj.magic false)
       (* this is a confusing test, but the goal is to check if we fail to
          upgrade, we will return a 500 *)
       | [ "upgrade_unsupported" ] ->
           conn
           |> Conn.upgrade (Obj.magic false)
-          |> Conn.send_response `OK ~body:"Not supported"
+          |> Conn.send_response `OK "Not supported"
       | [ "date_header" ] ->
           conn
           |> Conn.with_header "date" "Tue, 27 Sep 2022 07:17:32 GMT"
-          |> Conn.send_response `OK ~body:"OK"
+          |> Conn.send_response `OK "OK"
       | _ -> failwith "not implemented"
     in
 
