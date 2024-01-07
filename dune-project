@@ -25,6 +25,8 @@
    (ocaml (>= "5.1.0"))
    (ppx_bitstring (>= "4.1.0"))
    (riot (>= "0.0.7"))
+   (uutf (>= "1.0.3"))
+   (digestif (>= "1.1.4"))
    (telemetry (>= "0.0.1")))
  (tags
   (riot http server)))
