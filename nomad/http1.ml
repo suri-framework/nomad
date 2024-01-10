@@ -45,7 +45,7 @@ module Parser = struct
     (captured, rest)
 
   let rec parse ~(config : Config.t) data =
-    let str = IO.Buffer.to_string data in
+    let str = IO.Bytes.to_string data in
     let data = str |> Bitstring.bitstring_of_string in
     match do_parse ~config data with
     | exception Bad_request -> `bad_request
@@ -55,7 +55,7 @@ module Parser = struct
     | req ->
         Logger.debug (fun f ->
             f "parsed_request: %a -> preread_body=%d" Trail.Request.pp req
-              (IO.Buffer.filled req.buffer));
+              (IO.Bytes.length req.buffer));
         `ok req
 
   and do_parse ~config data =
@@ -67,7 +67,7 @@ module Parser = struct
     in
     Logger.trace (fun f -> f "creating request");
     let body = Bitstring.string_of_bitstring rest in
-    let body = IO.Buffer.of_string body in
+    let body = IO.Bytes.of_string body in
     Trail.Request.make ~body ~meth ~version ~headers path
 
   and parse_method max_len data =
@@ -264,12 +264,12 @@ let handle_data data conn state =
   let data, state =
     match state.sniffed_data with
     | Some sniff ->
-        let data = IO.Buffer.to_string data in
+        let data = IO.Bytes.to_string data in
         let data = sniff ^ data in
-        (IO.Buffer.of_string data, { state with sniffed_data = None })
+        (IO.Bytes.of_string data, { state with sniffed_data = None })
     | None -> (data, state)
   in
-  Logger.trace (fun f -> f "handling data: %d bytes" (IO.Buffer.length data));
+  Logger.trace (fun f -> f "handling data: %d bytes" (IO.Bytes.length data));
 
   match
     match Parser.parse ~config:state.config data with

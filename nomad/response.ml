@@ -24,5 +24,5 @@ let to_buffer { status; headers; version } =
   let ba = Faraday.serialize_to_bigstring buf in
   let len = Bigstringaf.length ba in
   let cs = Cstruct.of_bigarray ~off:0 ~len ba in
-  IO.Buffer.of_cstruct ~filled:len cs
+  IO.Bytes.of_cstruct ~filled:len cs
   *)

@@ -15,7 +15,7 @@ let alpn_protocol conn =
 
 let sniff_wire conn =
   let* data = Atacama.Connection.receive ~limit:24 conn in
-  match IO.Buffer.to_string data with
+  match IO.Bytes.to_string data with
   | "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n" -> Ok `http2
   | data -> Ok (`no_match data)
 

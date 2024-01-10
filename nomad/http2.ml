@@ -46,7 +46,7 @@ let default_settings =
 type state = {
   request : Http.Request.t;
   handler : Handler.t;
-  buffer : IO.Buffer.t;
+  buffer : IO.Bytes.t;
   conn : Atacama.Connection.t;
   settings : settings;
   streams : (Frame.stream_id, Pid.t) Hashtbl.t;
@@ -109,7 +109,7 @@ let make ?(settings = default_settings) ~handler ~conn () =
   {
     request = Http.Request.make "";
     handler;
-    buffer = IO.Buffer.with_capacity 4096;
+    buffer = IO.Bytes.with_capacity 4096;
     conn;
     settings;
     streams = Hashtbl.create 128;
@@ -129,8 +129,8 @@ let handle_connection conn state =
   Logger.debug (fun f -> f "switched to http2");
   let frame = Frame.serialize Frame.empty_settings in
   match Atacama.Connection.send conn frame with
-  | Ok n ->
-      Logger.debug (fun f -> f "sent %d bytes" n);
+  | Ok () ->
+      Logger.debug (fun f -> f "sent %d bytes" (IO.Bytes.length frame));
       Continue state
   | _ -> Error (state, `could_not_initialize_connection)
 
@@ -151,7 +151,7 @@ let handle_frame frame conn state =
   `continue (Continue state)
 
 let handle_data data conn state =
-  let data = IO.Buffer.to_string state.buffer ^ IO.Buffer.to_string data in
+  let data = IO.Bytes.to_string state.buffer ^ IO.Bytes.to_string data in
   data
   |> Stream.unfold
        (Frame.deserialize ~max_frame_size:state.settings.max_frame_size)

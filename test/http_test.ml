@@ -95,11 +95,9 @@ module Test : Application.Intf = struct
           |> Conn.with_header "content-length" "10001"
           |> Conn.send_response `OK (String.make 10_000 'a')
       | [ "send_200" ] -> conn |> Conn.send_status `OK
-      | [ "send_204" ] ->
-          conn |> Conn.send_response `No_content "bad content"
+      | [ "send_204" ] -> conn |> Conn.send_response `No_content "bad content"
       | [ "send_301" ] -> conn |> Conn.send_status `Moved_permanently
-      | [ "send_304" ] ->
-          conn |> Conn.send_response `Not_modified "bad content"
+      | [ "send_304" ] -> conn |> Conn.send_response `Not_modified "bad content"
       | [ "send_401" ] -> conn |> Conn.send_status `Unauthorized
       | [ "send_stream" ] ->
           let chunks = Seq.repeat "hello world" in
@@ -140,7 +138,7 @@ module Test : Application.Intf = struct
       | "expect_headers" :: _ -> conn |> Conn.send_response `OK "OK"
       | "expect_no_body" :: [] ->
           let[@warning "-8"] (Conn.Ok (conn, body)) = Conn.read_body conn in
-          assert (IO.Buffer.to_string body = "");
+          assert (IO.Bytes.to_string body = "");
           conn |> Conn.send_response `OK "OK"
       | "expect_body" :: [] ->
           let expected_content_length = "8000000" in
@@ -154,9 +152,8 @@ module Test : Application.Intf = struct
           let[@warning "-8"] (Conn.Ok (conn, actual_body)) =
             Conn.read_body conn
           in
-          let actual_body = IO.Buffer.to_string actual_body in
-          Logger.debug (fun f ->
-              f "actual_ %d" (String.length actual_body));
+          let actual_body = IO.Bytes.to_string actual_body in
+          Logger.debug (fun f -> f "actual_ %d" (String.length actual_body));
           assert (String.equal content_length expected_content_length);
           assert (String.equal actual_body expected_body);
           conn |> Conn.send_response `OK "OK"
@@ -172,9 +169,8 @@ module Test : Application.Intf = struct
           let[@warning "-8"] (Conn.Ok (conn, actual_body)) =
             Conn.read_body conn
           in
-          let actual_body = IO.Buffer.to_string actual_body in
-          Logger.debug (fun f ->
-              f "actual_ %d" (String.length actual_body));
+          let actual_body = IO.Bytes.to_string actual_body in
+          Logger.debug (fun f -> f "actual_ %d" (String.length actual_body));
           assert (String.equal content_length expected_content_length);
           assert (String.equal actual_body expected_body);
           conn |> Conn.send_response `OK "OK"
@@ -182,7 +178,7 @@ module Test : Application.Intf = struct
           let[@warning "-8"] (Conn.Ok (conn, body)) =
             Conn.read_body ~limit:5 conn
           in
-          let body = IO.Buffer.to_string body in
+          let body = IO.Bytes.to_string body in
           conn |> Conn.send_response `OK body
       | "error_catcher" :: [] ->
           let[@warning "-8"] (Conn.Error (conn, reason)) =
@@ -207,7 +203,7 @@ module Test : Application.Intf = struct
           in
           Logger.debug (fun f ->
               f "multiple_body_read: %d" conn.req.body_remaining);
-          let body = IO.Buffer.to_string body in
+          let body = IO.Bytes.to_string body in
           Logger.debug (fun f -> f " %s" body);
           conn |> Conn.send_response `OK body
       | "expect_chunked_body" :: [] ->
@@ -217,12 +213,11 @@ module Test : Application.Intf = struct
           let[@warning "-8"] (Conn.Ok (conn, actual_body)) =
             Conn.read_body conn
           in
-          let actual_body = IO.Buffer.to_string actual_body in
+          let actual_body = IO.Bytes.to_string actual_body in
           let expected_body =
             List.init 8_000_000 (fun _ -> "a") |> String.concat ""
           in
-          Logger.debug (fun f ->
-              f "actual_ %d" (String.length actual_body));
+          Logger.debug (fun f -> f "actual_ %d" (String.length actual_body));
           assert (String.equal transfer_encoding "chunked");
           assert (String.equal actual_body expected_body);
           conn |> Conn.send_response `OK "OK"

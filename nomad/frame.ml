@@ -11,7 +11,7 @@ let max_window_size = 2_147_483_647
 type stream_id = int
 
 module Continuation = struct
-  type t = { stream_id : stream_id; end_headers : bool; fragment : IO.Buffer.t }
+  type t = { stream_id : stream_id; end_headers : bool; fragment : IO.Bytes.t }
 
   let has_headers_bit = is_flag_set 2
   let frame_type = 0x9
@@ -21,25 +21,25 @@ module Continuation = struct
       Error (`protocol_error `continuation_frame_with_zero_stream_id)
     else
       let fragment =
-        IO.Buffer.of_string (Bitstring.string_of_bitstring payload)
+        IO.Bytes.of_string (Bitstring.string_of_bitstring payload)
       in
       Ok { stream_id; fragment; end_headers = has_headers_bit flags }
 
   let[@tail_mod_cons] rec parts t =
-    let length = IO.Buffer.length t.fragment in
+    let length = IO.Bytes.length t.fragment in
     if length <= max_frame_size then
       let data =
-        IO.Buffer.to_string t.fragment |> Bitstring.bitstring_of_string
+        IO.Bytes.to_string t.fragment |> Bitstring.bitstring_of_string
       in
       [ (frame_type, flags [ 2 ], t.stream_id, data) ]
     else
       let this_frame =
-        let sub = IO.Buffer.sub ~len:max_frame_size t.fragment in
-        IO.Buffer.to_string sub |> Bitstring.bitstring_of_string
+        let sub = IO.Bytes.sub ~pos:0 ~len:max_frame_size t.fragment in
+        IO.Bytes.to_string sub |> Bitstring.bitstring_of_string
       in
       let rest =
-        let len = IO.Buffer.length t.fragment - max_frame_size in
-        IO.Buffer.sub ~off:max_frame_size ~len t.fragment
+        let len = IO.Bytes.length t.fragment - max_frame_size in
+        IO.Bytes.sub ~pos:max_frame_size ~len t.fragment
       in
       let frame = (frame_type, 0x0, t.stream_id, this_frame) in
       frame :: parts { t with fragment = rest }
@@ -48,7 +48,7 @@ end
 module Data = struct
   type t = {
     stream_id : stream_id;
-    data : IO.Buffer.t;
+    data : IO.Bytes.t;
     end_stream : bool;
     flags : int;
   }
@@ -62,7 +62,7 @@ module Data = struct
     | {| padding : 8 ; rest : -1 : string |} when String.length rest >= padding
       ->
         let data = String.sub rest 0 (String.length rest - padding) in
-        let data = IO.Buffer.of_string data in
+        let data = IO.Bytes.of_string data in
         Ok { stream_id; data; end_stream = has_end_stream_bit flags; flags }
     | {| _ |} -> Error (`protocol_error `data_frame_with_invalid_padding_length)
 
@@ -71,23 +71,23 @@ module Data = struct
       Error (`protocol_error `data_frame_with_zero_stream_id)
     else if has_padding_bit flags then padded_data ~flags ~stream_id ~payload
     else
-      let data = IO.Buffer.of_string (Bitstring.string_of_bitstring payload) in
+      let data = IO.Bytes.of_string (Bitstring.string_of_bitstring payload) in
       Ok { stream_id; data; end_stream = has_end_stream_bit flags; flags }
 
   let[@tail_mod_cons] rec parts t =
-    let length = IO.Buffer.length t.data in
+    let length = IO.Bytes.length t.data in
     if length <= max_frame_size then
       let flags = flags (if t.end_stream then [ 0 ] else []) in
-      let data = IO.Buffer.to_string t.data |> Bitstring.bitstring_of_string in
+      let data = IO.Bytes.to_string t.data |> Bitstring.bitstring_of_string in
       [ (frame_type, flags, t.stream_id, data) ]
     else
       let this_frame =
-        let sub = IO.Buffer.sub ~len:max_frame_size t.data in
-        IO.Buffer.to_string sub |> Bitstring.bitstring_of_string
+        let sub = IO.Bytes.sub ~pos:0 ~len:max_frame_size t.data in
+        IO.Bytes.to_string sub |> Bitstring.bitstring_of_string
       in
       let rest =
-        let len = IO.Buffer.length t.data - max_frame_size in
-        IO.Buffer.sub ~off:max_frame_size ~len t.data
+        let len = IO.Bytes.length t.data - max_frame_size in
+        IO.Bytes.sub ~pos:max_frame_size ~len t.data
       in
       let frame = (frame_type, 0x0, t.stream_id, this_frame) in
       frame :: parts { t with data = rest }
@@ -192,7 +192,7 @@ module Headers = struct
     exclusive_dependency : bool;
     stream_dependency : stream_id option;
     weight : int;
-    fragment : IO.Buffer.t;
+    fragment : IO.Bytes.t;
   }
 
   let pp fmt t =
@@ -202,7 +202,7 @@ module Headers = struct
       t.stream_id t.end_stream t.end_headers t.exclusive_dependency
       (Option.value ~default:0 t.stream_dependency)
       t.weight
-      (IO.Buffer.to_string t.fragment)
+      (IO.Bytes.to_string t.fragment)
 
   let has_end_stream_bit = is_flag_set 0
   let has_end_headers_bit = is_flag_set 2
@@ -231,7 +231,7 @@ module Headers = struct
             stream_dependency = Some stream_dependency;
             weight;
             fragment =
-              IO.Buffer.of_string
+              IO.Bytes.of_string
                 (String.sub rest 0 (String.length rest - padding_length));
           }
     (* padding but no priority *)
@@ -247,7 +247,7 @@ module Headers = struct
             stream_dependency = None;
             weight = 0;
             fragment =
-              IO.Buffer.of_string
+              IO.Bytes.of_string
                 (String.sub rest 0 (String.length rest - padding_length));
           }
     (* other padding cases *)
@@ -267,7 +267,7 @@ module Headers = struct
             exclusive_dependency;
             stream_dependency = Some stream_dependency;
             weight;
-            fragment = IO.Buffer.of_string fragment;
+            fragment = IO.Bytes.of_string fragment;
           }
     (* no priority and no padding *)
     | {| fragment : -1 : string |} ->
@@ -279,7 +279,7 @@ module Headers = struct
             exclusive_dependency = false;
             stream_dependency = None;
             weight = 0;
-            fragment = IO.Buffer.of_string fragment;
+            fragment = IO.Bytes.of_string fragment;
           }
 
   let make ~flags ~stream_id ~payload =
@@ -289,21 +289,21 @@ module Headers = struct
 
   let parts t =
     let bits = if t.end_stream then [ 0 ] else [] in
-    let fragment_length = IO.Buffer.length t.fragment in
+    let fragment_length = IO.Bytes.length t.fragment in
 
     if fragment_length <= max_frame_size then
       let data =
-        IO.Buffer.to_string t.fragment |> Bitstring.bitstring_of_string
+        IO.Bytes.to_string t.fragment |> Bitstring.bitstring_of_string
       in
       [ (0x1, flags (2 :: bits), t.stream_id, data) ]
     else
       let this_frame =
-        let sub = IO.Buffer.sub ~len:max_frame_size t.fragment in
-        IO.Buffer.to_string sub |> Bitstring.bitstring_of_string
+        let sub = IO.Bytes.sub ~pos:0 ~len:max_frame_size t.fragment in
+        IO.Bytes.to_string sub |> Bitstring.bitstring_of_string
       in
       let rest =
-        let len = IO.Buffer.length t.fragment - max_frame_size in
-        IO.Buffer.sub ~off:max_frame_size ~len t.fragment
+        let len = IO.Bytes.length t.fragment - max_frame_size in
+        IO.Bytes.sub ~pos:max_frame_size ~len t.fragment
       in
       let frame = (0x1, 0x0, t.stream_id, this_frame) in
       frame
@@ -376,14 +376,14 @@ module Push_promise = struct
 end
 
 module Ping = struct
-  type t = { ack : bool; payload : IO.Buffer.t }
+  type t = { ack : bool; payload : IO.Bytes.t }
 
   let has_ack_bit = is_flag_set 0
 
   let make ~flags ~stream_id ~payload =
     match%bitstring payload with
     | {| payload : 8 : string |} when stream_id = 0 ->
-        Ok { ack = has_ack_bit flags; payload = IO.Buffer.of_string payload }
+        Ok { ack = has_ack_bit flags; payload = IO.Bytes.of_string payload }
     | {| _ |} when stream_id != 0 ->
         Error (`protocol_error `invalid_stream_id_in_ping_frame)
     | {| _ |} -> Error (`protocol_error `invalid_payload_size_in_ping_frame)
@@ -391,7 +391,7 @@ module Ping = struct
   let parts t =
     let flags = if t.ack then flags [ 0 ] else 0 in
     let payload =
-      IO.Buffer.to_string t.payload |> Bitstring.bitstring_of_string
+      IO.Bytes.to_string t.payload |> Bitstring.bitstring_of_string
     in
     [ (0x6, flags, 0, payload) ]
 end
@@ -400,7 +400,7 @@ module Go_away = struct
   type t = {
     last_stream_id : stream_id;
     error_code : int32;
-    debug_data : IO.Buffer.t;
+    debug_data : IO.Bytes.t;
   }
 
   let make ~flags:_ ~stream_id ~payload =
@@ -411,7 +411,7 @@ module Go_away = struct
           {
             last_stream_id;
             error_code;
-            debug_data = IO.Buffer.of_string debug_data;
+            debug_data = IO.Bytes.of_string debug_data;
           }
     | {| _ |} when stream_id != 0 ->
         Error (`protocol_error `invalid_stream_id_in_goaway_frame)
@@ -425,7 +425,7 @@ module Go_away = struct
         Bitstring.concat
           [
             {%bitstring| 0 : 1; t.last_stream_id : 31 ; t.error_code : 32 |};
-            Bitstring.bitstring_of_string (IO.Buffer.to_string t.debug_data);
+            Bitstring.bitstring_of_string (IO.Bytes.to_string t.debug_data);
           ] );
     ]
 end
@@ -455,7 +455,7 @@ type t =
   | Window_update of Window_update.t
   | Continuation of Continuation.t
   | Settings of Settings.t
-  | Unknown of { stream_id : stream_id; flags : int; payload : IO.Buffer.t }
+  | Unknown of { stream_id : stream_id; flags : int; payload : IO.Bytes.t }
 
 let pp fmt t =
   match t with
@@ -517,7 +517,7 @@ let make ~type_ ~flags ~stream_id ~payload =
         Continuation.make ~flags ~stream_id ~payload |> Result.map continuation
     | _ ->
         let payload =
-          IO.Buffer.of_string (Bitstring.string_of_bitstring payload)
+          IO.Bytes.of_string (Bitstring.string_of_bitstring payload)
         in
         Ok (Unknown { stream_id; flags; payload })
   in
@@ -536,7 +536,7 @@ let deserialize ~max_frame_size data =
       |}
     when length <= max_frame_size ->
       Some (make ~type_ ~flags ~stream_id ~payload, rest)
-  | {| data : -1 : string  |} -> Some (`more (IO.Buffer.of_string data), "")
+  | {| data : -1 : string  |} -> Some (`more (IO.Bytes.of_string data), "")
 
 let parts frame =
   match frame with
@@ -552,7 +552,7 @@ let parts frame =
   | Continuation t -> Continuation.parts t
   | Unknown { stream_id; flags; payload } ->
       let payload =
-        IO.Buffer.to_string payload |> Bitstring.bitstring_of_string
+        IO.Bytes.to_string payload |> Bitstring.bitstring_of_string
       in
       [ (0x3, stream_id, flags, payload) ]
 
@@ -574,4 +574,4 @@ let serialize frame =
   in
   let frames = Bitstring.string_of_bitstring frames in
   Logger.debug (fun f -> f "htt2.frame.serialize %S" frames);
-  IO.Buffer.of_string frames
+  IO.Bytes.of_string frames
