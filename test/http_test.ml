@@ -9,7 +9,7 @@ end)
 
 module Test : Application.Intf = struct
   let start () =
-    Logger.set_log_level (Some Trace);
+    Logger.set_log_level (Some Info);
     sleep 0.1;
     Logger.info (fun f -> f "starting nomad server");
 
@@ -17,7 +17,7 @@ module Test : Application.Intf = struct
       Logger.debug (fun f ->
           f "http_test.path: %S" (String.concat "." conn.req.path));
       match conn.req.path with
-      | [] -> conn |> Conn.send_response `OK {%b|"hello world"::bytes|}
+      | [] -> conn |> Conn.send_response `OK {%b|"hello world"|}
       | [ "echo_method" ] ->
           let body =
             conn.req.meth |> Http.Method.to_string |> Bytestring.of_string
@@ -107,13 +107,13 @@ module Test : Application.Intf = struct
                (String.make 10_000 'a' |> Bytestring.of_string)
       | [ "send_200" ] -> conn |> Conn.send_status `OK
       | [ "send_204" ] ->
-          conn |> Conn.send_response `No_content {%b|"bad content"::bytes|}
+          conn |> Conn.send_response `No_content {%b|"bad content"|}
       | [ "send_301" ] -> conn |> Conn.send_status `Moved_permanently
       | [ "send_304" ] ->
-          conn |> Conn.send_response `Not_modified {%b|"bad content"::bytes|}
+          conn |> Conn.send_response `Not_modified {%b|"bad content"|}
       | [ "send_401" ] -> conn |> Conn.send_status `Unauthorized
       | [ "send_stream" ] ->
-          let chunks = Seq.repeat {%b|"hello world"::bytes|} in
+          let chunks = Seq.repeat {%b|"hello world"|} in
 
           chunks
           |> Seq.fold_left
@@ -122,14 +122,14 @@ module Test : Application.Intf = struct
           |> Conn.close
       | [ "send_chunked_200" ] ->
           conn |> Conn.send_chunked `OK
-          |> Conn.chunk {%b|"OK"::bytes|}
+          |> Conn.chunk {%b|"OK"|}
           |> Conn.close
       | [ "erroring_chunk" ] ->
           let conn =
-            conn |> Conn.send_chunked `OK |> Conn.chunk {%b|"OK"::bytes|}
+            conn |> Conn.send_chunked `OK |> Conn.chunk {%b|"OK"|}
           in
           Atacama.Connection.close conn.conn;
-          conn |> Conn.chunk {%b|"NOT OK"::bytes|}
+          conn |> Conn.chunk {%b|"NOT OK"|}
       | [ "send_file" ] ->
           let query = Uri.query conn.req.uri in
           Logger.debug (fun f -> f "%S" (Uri.encoded_of_query query));
@@ -153,18 +153,18 @@ module Test : Application.Intf = struct
       | [ "send_inform" ] ->
           conn
           |> Conn.inform `Continue [ ("x-from", "inform") ]
-          |> Conn.send_response `OK {%b|"Informer"::bytes|}
+          |> Conn.send_response `OK {%b|"Informer"|}
       | [ "report_version" ] ->
           let body =
             conn.req.version |> Http.Version.to_string |> Bytestring.of_string
           in
           conn |> Conn.send_response `OK body
       | "expect_headers" :: _ ->
-          conn |> Conn.send_response `OK {%b|"OK"::bytes|}
+          conn |> Conn.send_response `OK {%b|"OK"|}
       | "expect_no_body" :: [] ->
           let[@warning "-8"] (Conn.Ok (conn, body)) = Conn.read_body conn in
           assert (Bytestring.to_string body = "");
-          conn |> Conn.send_response `OK {%b|"OK"::bytes|}
+          conn |> Conn.send_response `OK {%b|"OK"|}
       | "expect_body" :: [] ->
           let expected_content_length = "8000000" in
           let content_length =
@@ -181,7 +181,7 @@ module Test : Application.Intf = struct
           Logger.debug (fun f -> f "actual_ %d" (String.length actual_body));
           assert (String.equal content_length expected_content_length);
           assert (String.equal actual_body expected_body);
-          conn |> Conn.send_response `OK {%b|"OK"::bytes|}
+          conn |> Conn.send_response `OK {%b|"OK"|}
       | "expect_body_with_multiple_content_length" :: [] ->
           let expected_content_length = "8000000,8000000,8000000" in
           let content_length =
@@ -198,7 +198,7 @@ module Test : Application.Intf = struct
           Logger.debug (fun f -> f "actual_ %d" (String.length actual_body));
           assert (String.equal content_length expected_content_length);
           assert (String.equal actual_body expected_body);
-          conn |> Conn.send_response `OK {%b|"OK"::bytes|}
+          conn |> Conn.send_response `OK {%b|"OK"|}
       | "read_one_byte_at_a_time" :: [] ->
           let[@warning "-8"] (Conn.Ok (conn, body)) =
             Conn.read_body ~limit:5 conn
@@ -243,22 +243,22 @@ module Test : Application.Intf = struct
           Logger.debug (fun f -> f "actual_ %d" (String.length actual_body));
           assert (String.equal transfer_encoding "chunked");
           assert (String.equal actual_body expected_body);
-          conn |> Conn.send_response `OK {%b|"OK"::bytes|}
+          conn |> Conn.send_response `OK {%b|"OK"|}
       | [ "upgrade_websocket" ] -> conn |> Conn.upgrade (Obj.magic false)
       (* this is a confusing test, but the goal is to check if we fail to
          upgrade, we will return a 500 *)
       | [ "upgrade_unsupported" ] ->
           conn
           |> Conn.upgrade (Obj.magic false)
-          |> Conn.send_response `OK {%b|"Not supported"::bytes|}
+          |> Conn.send_response `OK {%b|"Not supported"|}
       | [ "date_header" ] ->
           conn
           |> Conn.with_header "date" "Tue, 27 Sep 2022 07:17:32 GMT"
-          |> Conn.send_response `OK {%b|"OK"::bytes|}
+          |> Conn.send_response `OK {%b|"OK"|}
       | _ -> failwith "not implemented"
     in
 
-    let handler = Nomad.trail [ hello_world ] in
+    let handler = Nomad.trail [ Trail.logger ~level:Debug (); hello_world ] in
 
     Nomad.start_link ~acceptors:1
       ~transport:
