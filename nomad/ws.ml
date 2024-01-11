@@ -12,7 +12,7 @@ type state = {
   upgrade_opts : Trail.Sock.upgrade_opts;
   handler : Trail.Sock.t;
   req : Trail.Request.t;
-  buffer : IO.Bytes.t;
+  buffer : Bytestring.t;
   conn : Atacama.Connection.t;
 }
 
@@ -21,7 +21,7 @@ type error = [ `Unknown_opcode of int ]
 let pp_err _fmt _ = ()
 
 let make ~upgrade_opts ~handler ~req ~conn () =
-  { upgrade_opts; handler; req; buffer = IO.Bytes.with_capacity 4096; conn }
+  { upgrade_opts; handler; req; buffer = Bytestring.empty; conn }
 
 let handshake (req : Trail.Request.t) conn state =
   let[@warning "-8"] (Some client_key) =
@@ -70,7 +70,7 @@ let rec send_frames state conn frames return =
           `halt (Close state))
 
 let handle_data data conn state =
-  let data = IO.Bytes.to_string state.buffer ^ IO.Bytes.to_string data in
+  let data = Bytestring.to_string state.buffer ^ Bytestring.to_string data in
   Stream.unfold Trail.Frame.deserialize data
   |> Stream.reduce_while (Continue state) @@ fun frame state ->
      match (frame, state) with

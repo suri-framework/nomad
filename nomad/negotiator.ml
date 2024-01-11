@@ -15,9 +15,10 @@ let alpn_protocol conn =
 
 let sniff_wire conn =
   let* data = Atacama.Connection.receive ~limit:24 conn in
-  match IO.Bytes.to_string data with
-  | "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n" -> Ok `http2
-  | data -> Ok (`no_match data)
+  match%b data with
+  | {| "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"::bytes, _rest::bytes |} ->
+      Result.Ok `http2
+  | {| data::bytes |} -> Ok (`no_match data)
 
 let negotiated_protocol ~enabled_protocols ~config conn handler =
   let enabled proto = List.mem proto enabled_protocols in
@@ -28,12 +29,13 @@ let negotiated_protocol ~enabled_protocols ~config conn handler =
       Logger.error (fun f -> f " http2 detected! ");
       let state = Protocol.Http2.make ~handler ~conn () in
       Ok (H { handler = (module Protocol.Http2); state })
-  | (`http1 | `no_match), `no_match data when enabled `http1 ->
+  | (`http1 | `no_match), `no_match sniffed_data when enabled `http1 ->
       let are_we_tls = alpn = `http1 in
-      Logger.error (fun f -> f " http1 detected! ");
+      Logger.error (fun f ->
+          f " http1 detected! (sniffed_data = %S) "
+            (Bytestring.to_string sniffed_data));
       let state =
-        Protocol.Http1.make ~config ~are_we_tls ~sniffed_data:(Some data)
-          ~handler ()
+        Protocol.Http1.make ~config ~are_we_tls ~sniffed_data ~handler ()
       in
       Ok (H { handler = (module Protocol.Http1); state })
   | _ -> Error `No_protocol_matched

@@ -15,8 +15,10 @@ module Test : Application.Intf = struct
 
     let hello_world (conn : Conn.t) =
       Logger.debug (fun f ->
-          f "http_test.path: %s" (String.concat "." conn.req.path));
+          f "http_test.path: %S" (String.concat "." conn.req.path));
       match conn.req.path with
+      | [] ->
+          conn |> Conn.send_response `OK "hello world"
       | [ "echo_method" ] ->
           let body = conn.req.meth |> Http.Method.to_string in
           conn |> Conn.send_response `OK body
@@ -138,7 +140,7 @@ module Test : Application.Intf = struct
       | "expect_headers" :: _ -> conn |> Conn.send_response `OK "OK"
       | "expect_no_body" :: [] ->
           let[@warning "-8"] (Conn.Ok (conn, body)) = Conn.read_body conn in
-          assert (IO.Bytes.to_string body = "");
+          assert (Bytestring.to_string body = "");
           conn |> Conn.send_response `OK "OK"
       | "expect_body" :: [] ->
           let expected_content_length = "8000000" in
@@ -152,7 +154,7 @@ module Test : Application.Intf = struct
           let[@warning "-8"] (Conn.Ok (conn, actual_body)) =
             Conn.read_body conn
           in
-          let actual_body = IO.Bytes.to_string actual_body in
+          let actual_body = Bytestring.to_string actual_body in
           Logger.debug (fun f -> f "actual_ %d" (String.length actual_body));
           assert (String.equal content_length expected_content_length);
           assert (String.equal actual_body expected_body);
@@ -169,7 +171,7 @@ module Test : Application.Intf = struct
           let[@warning "-8"] (Conn.Ok (conn, actual_body)) =
             Conn.read_body conn
           in
-          let actual_body = IO.Bytes.to_string actual_body in
+          let actual_body = Bytestring.to_string actual_body in
           Logger.debug (fun f -> f "actual_ %d" (String.length actual_body));
           assert (String.equal content_length expected_content_length);
           assert (String.equal actual_body expected_body);
@@ -178,7 +180,7 @@ module Test : Application.Intf = struct
           let[@warning "-8"] (Conn.Ok (conn, body)) =
             Conn.read_body ~limit:5 conn
           in
-          let body = IO.Bytes.to_string body in
+          let body = Bytestring.to_string body in
           conn |> Conn.send_response `OK body
       | "error_catcher" :: [] ->
           let[@warning "-8"] (Conn.Error (conn, reason)) =
@@ -203,7 +205,7 @@ module Test : Application.Intf = struct
           in
           Logger.debug (fun f ->
               f "multiple_body_read: %d" conn.req.body_remaining);
-          let body = IO.Bytes.to_string body in
+          let body = Bytestring.to_string body in
           Logger.debug (fun f -> f " %s" body);
           conn |> Conn.send_response `OK body
       | "expect_chunked_body" :: [] ->
@@ -213,7 +215,7 @@ module Test : Application.Intf = struct
           let[@warning "-8"] (Conn.Ok (conn, actual_body)) =
             Conn.read_body conn
           in
-          let actual_body = IO.Bytes.to_string actual_body in
+          let actual_body = Bytestring.to_string actual_body in
           let expected_body =
             List.init 8_000_000 (fun _ -> "a") |> String.concat ""
           in
@@ -238,6 +240,7 @@ module Test : Application.Intf = struct
     let handler = Nomad.trail [ hello_world ] in
 
     Nomad.start_link
+    ~acceptors:1
       ~transport:
         Atacama.Transport.(
           tcp
