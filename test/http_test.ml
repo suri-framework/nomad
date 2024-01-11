@@ -17,10 +17,11 @@ module Test : Application.Intf = struct
       Logger.debug (fun f ->
           f "http_test.path: %S" (String.concat "." conn.req.path));
       match conn.req.path with
-      | [] ->
-          conn |> Conn.send_response `OK "hello world"
+      | [] -> conn |> Conn.send_response `OK {%b|"hello world"::bytes|}
       | [ "echo_method" ] ->
-          let body = conn.req.meth |> Http.Method.to_string in
+          let body =
+            conn.req.meth |> Http.Method.to_string |> Bytestring.of_string
+          in
           conn |> Conn.send_response `OK body
       | [ "*" ] when conn.req.meth = `OPTIONS ->
           let scheme =
@@ -42,6 +43,7 @@ module Test : Application.Intf = struct
                   "query_string": "%s"
               }|}
               scheme host port path query
+            |> Bytestring.of_string
           in
           conn |> Conn.send_response `OK body
       | [ "peer_data" ] ->
@@ -49,6 +51,7 @@ module Test : Application.Intf = struct
           let body =
             Format.sprintf {|{ "address": "%s", "port": %d }|}
               (Net.Addr.to_string ip) port
+            |> Bytestring.of_string
           in
           conn |> Conn.send_response `OK body
       | [ "echo_components" ] ->
@@ -71,38 +74,46 @@ module Test : Application.Intf = struct
                   "query_string": "%s"
               }|}
               scheme host port path query
+            |> Bytestring.of_string
           in
           conn |> Conn.send_response `OK body
       | [ "send_big_body" ] ->
-          let body = String.make 10_000 'a' in
+          let body = String.make 10_000 'a' |> Bytestring.of_string in
           conn |> Conn.send_response `OK body
       | [ "send_content_encoding" ] ->
           conn
           |> Conn.with_header "content-encoding" "deflate"
-          |> Conn.send_response `OK (String.make 10_000 'a')
+          |> Conn.send_response `OK
+               (String.make 10_000 'a' |> Bytestring.of_string)
       | [ "send_strong_etag" ] ->
           conn
           |> Conn.with_header "etag" "\"1234\""
-          |> Conn.send_response `OK (String.make 10_000 'a')
+          |> Conn.send_response `OK
+               (String.make 10_000 'a' |> Bytestring.of_string)
       | [ "send_weak_etag" ] ->
           conn
           |> Conn.with_header "etag" "W/\"1234\""
-          |> Conn.send_response `OK (String.make 10_000 'a')
+          |> Conn.send_response `OK
+               (String.make 10_000 'a' |> Bytestring.of_string)
       | [ "send_no_transform" ] ->
           conn
           |> Conn.with_header "cache-control" "no-transform"
-          |> Conn.send_response `OK (String.make 10_000 'a')
+          |> Conn.send_response `OK
+               (String.make 10_000 'a' |> Bytestring.of_string)
       | [ "send_incorrect_content_length" ] ->
           conn
           |> Conn.with_header "content-length" "10001"
-          |> Conn.send_response `OK (String.make 10_000 'a')
+          |> Conn.send_response `OK
+               (String.make 10_000 'a' |> Bytestring.of_string)
       | [ "send_200" ] -> conn |> Conn.send_status `OK
-      | [ "send_204" ] -> conn |> Conn.send_response `No_content "bad content"
+      | [ "send_204" ] ->
+          conn |> Conn.send_response `No_content {%b|"bad content"::bytes|}
       | [ "send_301" ] -> conn |> Conn.send_status `Moved_permanently
-      | [ "send_304" ] -> conn |> Conn.send_response `Not_modified "bad content"
+      | [ "send_304" ] ->
+          conn |> Conn.send_response `Not_modified {%b|"bad content"::bytes|}
       | [ "send_401" ] -> conn |> Conn.send_status `Unauthorized
       | [ "send_stream" ] ->
-          let chunks = Seq.repeat "hello world" in
+          let chunks = Seq.repeat {%b|"hello world"::bytes|} in
 
           chunks
           |> Seq.fold_left
@@ -110,38 +121,50 @@ module Test : Application.Intf = struct
                (Conn.send_chunked `OK conn)
           |> Conn.close
       | [ "send_chunked_200" ] ->
-          conn |> Conn.send_chunked `OK |> Conn.chunk "OK" |> Conn.close
+          conn |> Conn.send_chunked `OK
+          |> Conn.chunk {%b|"OK"::bytes|}
+          |> Conn.close
       | [ "erroring_chunk" ] ->
-          let conn = conn |> Conn.send_chunked `OK |> Conn.chunk "OK" in
+          let conn =
+            conn |> Conn.send_chunked `OK |> Conn.chunk {%b|"OK"::bytes|}
+          in
           Atacama.Connection.close conn.conn;
-          conn |> Conn.chunk "NOT OK"
+          conn |> Conn.chunk {%b|"NOT OK"::bytes|}
       | [ "send_file" ] ->
           let query = Uri.query conn.req.uri in
           Logger.debug (fun f -> f "%S" (Uri.encoded_of_query query));
           let off = List.assoc "offset" query |> List.hd |> int_of_string in
           let len = List.assoc "length" query |> List.hd |> int_of_string in
           conn
-          |> Conn.send_file ~off ~len `OK "./test/bandit/test/support/sendfile"
+          |> Conn.send_file ~off ~len `OK
+               ~path:"./test/bandit/test/support/sendfile"
       | [ "send_full_file" ] ->
-          conn |> Conn.send_file `OK "./test/bandit/test/support/sendfile"
+          conn
+          |> Conn.send_file `OK
+               ~path:"./test/bandit/test/support/sendfile"
       | [ "send_full_file_204" ] ->
           conn
-          |> Conn.send_file `No_content "./test/bandit/test/support/sendfile"
+          |> Conn.send_file `No_content
+               ~path:"./test/bandit/test/support/sendfile"
       | [ "send_full_file_304" ] ->
           conn
-          |> Conn.send_file `Not_modified "./test/bandit/test/support/sendfile"
+          |> Conn.send_file `Not_modified
+               ~path:"./test/bandit/test/support/sendfile"
       | [ "send_inform" ] ->
           conn
           |> Conn.inform `Continue [ ("x-from", "inform") ]
-          |> Conn.send_response `OK "Informer"
+          |> Conn.send_response `OK {%b|"Informer"::bytes|}
       | [ "report_version" ] ->
-          let body = conn.req.version |> Http.Version.to_string in
+          let body =
+            conn.req.version |> Http.Version.to_string |> Bytestring.of_string
+          in
           conn |> Conn.send_response `OK body
-      | "expect_headers" :: _ -> conn |> Conn.send_response `OK "OK"
+      | "expect_headers" :: _ ->
+          conn |> Conn.send_response `OK {%b|"OK"::bytes|}
       | "expect_no_body" :: [] ->
           let[@warning "-8"] (Conn.Ok (conn, body)) = Conn.read_body conn in
           assert (Bytestring.to_string body = "");
-          conn |> Conn.send_response `OK "OK"
+          conn |> Conn.send_response `OK {%b|"OK"::bytes|}
       | "expect_body" :: [] ->
           let expected_content_length = "8000000" in
           let content_length =
@@ -158,7 +181,7 @@ module Test : Application.Intf = struct
           Logger.debug (fun f -> f "actual_ %d" (String.length actual_body));
           assert (String.equal content_length expected_content_length);
           assert (String.equal actual_body expected_body);
-          conn |> Conn.send_response `OK "OK"
+          conn |> Conn.send_response `OK {%b|"OK"::bytes|}
       | "expect_body_with_multiple_content_length" :: [] ->
           let expected_content_length = "8000000,8000000,8000000" in
           let content_length =
@@ -175,22 +198,22 @@ module Test : Application.Intf = struct
           Logger.debug (fun f -> f "actual_ %d" (String.length actual_body));
           assert (String.equal content_length expected_content_length);
           assert (String.equal actual_body expected_body);
-          conn |> Conn.send_response `OK "OK"
+          conn |> Conn.send_response `OK {%b|"OK"::bytes|}
       | "read_one_byte_at_a_time" :: [] ->
           let[@warning "-8"] (Conn.Ok (conn, body)) =
             Conn.read_body ~limit:5 conn
           in
-          let body = Bytestring.to_string body in
           conn |> Conn.send_response `OK body
       | "error_catcher" :: [] ->
           let[@warning "-8"] (Conn.Error (conn, reason)) =
             Conn.read_body conn
           in
           let body =
-            match reason with
+            (match reason with
             | `Excess_body_read -> "Excess_body_read"
             | (`Closed | `Process_down | `Timeout | `Unix_error _) as reason ->
-                Format.asprintf "%a" IO.pp_err reason
+                Format.asprintf "%a" IO.pp_err reason)
+            |> Bytestring.of_string
           in
           conn |> Conn.send_response `OK body
       | "multiple_body_read" :: [] ->
@@ -205,8 +228,6 @@ module Test : Application.Intf = struct
           in
           Logger.debug (fun f ->
               f "multiple_body_read: %d" conn.req.body_remaining);
-          let body = Bytestring.to_string body in
-          Logger.debug (fun f -> f " %s" body);
           conn |> Conn.send_response `OK body
       | "expect_chunked_body" :: [] ->
           let transfer_encoding =
@@ -222,25 +243,24 @@ module Test : Application.Intf = struct
           Logger.debug (fun f -> f "actual_ %d" (String.length actual_body));
           assert (String.equal transfer_encoding "chunked");
           assert (String.equal actual_body expected_body);
-          conn |> Conn.send_response `OK "OK"
+          conn |> Conn.send_response `OK {%b|"OK"::bytes|}
       | [ "upgrade_websocket" ] -> conn |> Conn.upgrade (Obj.magic false)
       (* this is a confusing test, but the goal is to check if we fail to
          upgrade, we will return a 500 *)
       | [ "upgrade_unsupported" ] ->
           conn
           |> Conn.upgrade (Obj.magic false)
-          |> Conn.send_response `OK "Not supported"
+          |> Conn.send_response `OK {%b|"Not supported"::bytes|}
       | [ "date_header" ] ->
           conn
           |> Conn.with_header "date" "Tue, 27 Sep 2022 07:17:32 GMT"
-          |> Conn.send_response `OK "OK"
+          |> Conn.send_response `OK {%b|"OK"::bytes|}
       | _ -> failwith "not implemented"
     in
 
     let handler = Nomad.trail [ hello_world ] in
 
-    Nomad.start_link
-    ~acceptors:1
+    Nomad.start_link ~acceptors:1
       ~transport:
         Atacama.Transport.(
           tcp

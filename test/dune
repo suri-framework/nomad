@@ -1,4 +1,6 @@
 (executable
  (name http_test)
  (modules http_test)
+ (preprocess
+  (pps bytestring.ppx))
  (libraries trail nomad riot x509 mirage-crypto-rng mirage-crypto-rng.unix))
