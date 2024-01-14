@@ -216,7 +216,9 @@ let close_chunk conn =
   let _ = Atacama.Connection.send conn chunk in
   ()
 
-let send_file conn (req : Request.t) (res : Response.t) ?off ?len ~path () =
+let send_file _conn (_req : Request.t) (_res : Response.t) ?off:_ ?len:_ ~path:_
+    () =
+  (*
   let len =
     match len with
     | Some len -> len
@@ -235,6 +237,8 @@ let send_file conn (req : Request.t) (res : Response.t) ?off ?len ~path () =
   then
     let _ = Atacama.Connection.send_file conn ?off ~len (File.open_read path) in
     ()
+    *)
+  ()
 
 let close conn (req : Request.t) (res : Response.t) =
   if req.meth = `HEAD then ()

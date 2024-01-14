@@ -121,13 +121,9 @@ module Test : Application.Intf = struct
                (Conn.send_chunked `OK conn)
           |> Conn.close
       | [ "send_chunked_200" ] ->
-          conn |> Conn.send_chunked `OK
-          |> Conn.chunk {%b|"OK"|}
-          |> Conn.close
+          conn |> Conn.send_chunked `OK |> Conn.chunk {%b|"OK"|} |> Conn.close
       | [ "erroring_chunk" ] ->
-          let conn =
-            conn |> Conn.send_chunked `OK |> Conn.chunk {%b|"OK"|}
-          in
+          let conn = conn |> Conn.send_chunked `OK |> Conn.chunk {%b|"OK"|} in
           Atacama.Connection.close conn.conn;
           conn |> Conn.chunk {%b|"NOT OK"|}
       | [ "send_file" ] ->
@@ -139,9 +135,7 @@ module Test : Application.Intf = struct
           |> Conn.send_file ~off ~len `OK
                ~path:"./test/bandit/test/support/sendfile"
       | [ "send_full_file" ] ->
-          conn
-          |> Conn.send_file `OK
-               ~path:"./test/bandit/test/support/sendfile"
+          conn |> Conn.send_file `OK ~path:"./test/bandit/test/support/sendfile"
       | [ "send_full_file_204" ] ->
           conn
           |> Conn.send_file `No_content
@@ -159,8 +153,7 @@ module Test : Application.Intf = struct
             conn.req.version |> Http.Version.to_string |> Bytestring.of_string
           in
           conn |> Conn.send_response `OK body
-      | "expect_headers" :: _ ->
-          conn |> Conn.send_response `OK {%b|"OK"|}
+      | "expect_headers" :: _ -> conn |> Conn.send_response `OK {%b|"OK"|}
       | "expect_no_body" :: [] ->
           let[@warning "-8"] (Conn.Ok (conn, body)) = Conn.read_body conn in
           assert (Bytestring.to_string body = "");

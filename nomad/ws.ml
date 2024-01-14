@@ -65,8 +65,9 @@ let rec send_frames state conn frames return =
       | Error `Eof ->
           Logger.error (fun f -> f "ws.error: end of file");
           `halt (Close state)
-      | Error ((`Closed | `Timeout | `Process_down | `Unix_error _) as err) ->
-          Logger.error (fun f -> f "ws.error: %a" Net.Socket.pp_err err);
+      | Error ((`Closed | `Timeout | `Process_down | `Unix_error _ | _) as err)
+        ->
+          Logger.error (fun f -> f "ws.error: %a" IO.pp_err err);
           `halt (Close state))
 
 let handle_data data conn state =
