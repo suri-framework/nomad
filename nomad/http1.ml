@@ -176,7 +176,7 @@ let make ~are_we_tls ~sniffed_data ~handler ~config () =
     are_we_tls;
     config;
     is_keep_alive = false;
-    max_requests = 1000;
+    max_requests = 0;
     requests_processed = 0;
   }
 

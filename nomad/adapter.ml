@@ -196,8 +196,8 @@ let send conn (req : Request.t) (res : Response.t) =
     in
 
     debug (fun f -> f "res: %S" (Bytestring.to_string buf));
-    let _ = Atacama.Connection.send conn buf in
-    ()
+    Atacama.Connection.send conn buf
+    |> Result.get_ok
 
 let send_chunk conn (req : Request.t) buf =
   if req.meth = `HEAD then ()
