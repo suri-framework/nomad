@@ -212,6 +212,13 @@ let send_close res ?(req = Trail.Request.make "noop") conn state =
   let _ = Adapter.send conn req res in
   Close state
 
+let should_keep_alive (req : Trail.Request.t) =
+  match (req.version, Http.Header.get req.headers "connection") with
+  | _, Some "close" -> false
+  | _, Some "keep-alive" -> true
+  | `HTTP_1_1, _ -> true
+  | _, _ -> false
+
 let internal_server_error = send_close Trail.Response.(internal_server_error ())
 let bad_request = send_close Trail.Response.(bad_request ())
 let uri_too_long = send_close Trail.Response.(request_uri_too_long ())
@@ -249,14 +256,7 @@ let run_handler state conn req =
       | _ -> None
     in
     let _content_length = Trail.Request.content_length req in
-    let is_keep_alive =
-      if state.is_keep_alive then state.is_keep_alive
-      else
-        match Http.Header.get req.headers "connection" with
-        | Some "close" -> false
-        | Some "keep-alive" -> true
-        | _ -> true
-    in
+    let is_keep_alive = should_keep_alive req in
     trace (fun f -> f "connection is keep alive? %b" is_keep_alive);
     let state = { state with is_keep_alive } in
     (state, req.version, host)
