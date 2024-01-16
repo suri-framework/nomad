@@ -53,7 +53,7 @@ module Parser = struct
     | exception Header_fields_too_large -> `header_fields_too_large
     | exception Need_more_data -> `more data
     | req ->
-        error (fun f ->
+        trace (fun f ->
             f "parsed_request: %a -> preread_body=%d" Trail.Request.pp req
               (Bytestring.length req.buffer));
         `ok req
