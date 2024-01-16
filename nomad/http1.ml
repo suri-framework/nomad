@@ -153,19 +153,32 @@ type state = {
   handler : Handler.t;
   are_we_tls : bool;
   config : Config.t;
+  max_requests : int;
+  requests_processed : int;
 }
 
-type error = [ `noop ]
+type error = [ `Excess_body_read | IO.io_error ]
 
 exception Bad_port
 exception Path_missing_leading_slash
 exception Uri_too_long
 exception Bad_request
 
-let pp_err _fmt _ = ()
+let pp_err fmt t =
+  match t with
+  | `Excess_body_read -> Format.fprintf fmt "Excess body read"
+  | #IO.io_error as io_err -> IO.pp_err fmt io_err
 
 let make ~are_we_tls ~sniffed_data ~handler ~config () =
-  { sniffed_data; handler; are_we_tls; config; is_keep_alive = false }
+  {
+    sniffed_data;
+    handler;
+    are_we_tls;
+    config;
+    is_keep_alive = false;
+    max_requests = 1000;
+    requests_processed = 0;
+  }
 
 let handle_connection _conn state =
   info (fun f -> f "switched to http1");
@@ -226,13 +239,31 @@ let uri_too_long = send_close Trail.Response.(request_uri_too_long ())
 let header_fields_too_large =
   send_close Trail.Response.(request_header_fields_too_large ())
 
+let rec ensure_body_read conn req =
+  match Adapter.read_body conn req with
+  | Ok (_, _) -> Result.Ok ()
+  | More (req, _) -> ensure_body_read conn req
+  | Error (_, reason) -> Error reason
+
+let maybe_keep_alive state conn (req : Trail.Request.t) =
+  let requests_processed = state.requests_processed + 1 in
+  let under_limit =
+    state.max_requests == 0 || requests_processed < state.max_requests
+  in
+  trace (fun f ->
+      f "requests_processed %d | under limit? %b | is_keep_alive? %b"
+        requests_processed under_limit state.is_keep_alive);
+  if under_limit && state.is_keep_alive then
+    match ensure_body_read conn req with
+    | Ok () -> Continue { state with sniffed_data = {%b||}; requests_processed }
+    | Error `Closed -> Close state
+    | Error reason -> Error (state, reason)
+  else Close state
+
 let handle_request state conn req =
   info (fun f -> f "handle_request: %a" Trail.Request.pp req);
   match state.handler conn req with
-  | Handler.Close _conn when state.is_keep_alive ->
-      debug (fun f -> f "connection is keep alive, continuing");
-      Continue { state with sniffed_data = {%b||} }
-  | Handler.Close _conn -> Close state
+  | Handler.Close _conn -> maybe_keep_alive state conn req
   | Handler.Upgrade (`websocket (upgrade_opts, handler)) ->
       let state = Ws.make ~upgrade_opts ~handler ~req ~conn () in
       let state = Ws.handshake req conn state in
