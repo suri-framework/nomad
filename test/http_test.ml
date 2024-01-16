@@ -253,7 +253,7 @@ module Test : Application.Intf = struct
 
     let handler = Nomad.trail [ Trail.logger ~level:Debug (); hello_world ] in
 
-    Nomad.start_link ~acceptors:1
+    Nomad.start_link
       ~transport:
         Atacama.Transport.(
           tcp
@@ -261,7 +261,7 @@ module Test : Application.Intf = struct
             ())
       ~config:
         (Nomad.Config.make ~max_header_count:40 ~max_header_length:5000 ())
-      ~port:2112 ~handler ()
+      ~port:2114 ~handler ()
 end
 
 let () = Riot.start ~apps:[ (module Riot.Logger); (module Test) ] ()

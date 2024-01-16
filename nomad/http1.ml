@@ -149,6 +149,7 @@ end
 
 type state = {
   sniffed_data : Bytestring.t;
+  is_keep_alive : bool;
   handler : Handler.t;
   are_we_tls : bool;
   config : Config.t;
@@ -164,7 +165,7 @@ exception Bad_request
 let pp_err _fmt _ = ()
 
 let make ~are_we_tls ~sniffed_data ~handler ~config () =
-  { sniffed_data; handler; are_we_tls; config }
+  { sniffed_data; handler; are_we_tls; config; is_keep_alive = false }
 
 let handle_connection _conn state =
   info (fun f -> f "switched to http1");
@@ -220,13 +221,8 @@ let header_fields_too_large =
 
 let handle_request state conn req =
   info (fun f -> f "handle_request: %a" Trail.Request.pp req);
-  let is_keep_alive =
-    match Http.Header.get req.headers "connection" with
-    | Some "keep-alive" -> true
-    | _ -> false
-  in
   match state.handler conn req with
-  | Handler.Close _conn when is_keep_alive ->
+  | Handler.Close _conn when state.is_keep_alive ->
       debug (fun f -> f "connection is keep alive, continuing");
       Continue { state with sniffed_data = {%b||} }
   | Handler.Close _conn -> Close state
@@ -244,6 +240,7 @@ let run_handler state conn req =
   trace (fun f -> f "run_handler: %a" Trail.Request.pp req);
   match
     let uri = make_uri state req in
+    let req = { req with uri } in
     let host =
       match (Http.Header.get req.headers "host", Uri.host uri) with
       | Some host, _ -> Some host
@@ -252,11 +249,21 @@ let run_handler state conn req =
       | _ -> None
     in
     let _content_length = Trail.Request.content_length req in
-    (req.version, host, uri)
+    let is_keep_alive =
+      if state.is_keep_alive then state.is_keep_alive
+      else
+        match Http.Header.get req.headers "connection" with
+        | Some "close" -> false
+        | Some "keep-alive" -> true
+        | _ -> true
+    in
+    trace (fun f -> f "connection is keep alive? %b" is_keep_alive);
+    let state = { state with is_keep_alive } in
+    (state, req.version, host)
   with
-  | `HTTP_1_1, Some _host, uri -> handle_request state conn { req with uri }
-  | `HTTP_1_0, _, uri -> handle_request state conn { req with uri }
-  | _ -> bad_request ~req conn state
+  | state, `HTTP_1_1, Some _host -> handle_request state conn req
+  | state, `HTTP_1_0, _host -> handle_request state conn req
+  | state, _http, _host -> bad_request ~req conn state
 
 let handle_data data conn state =
   trace (fun f -> f "handling data: %a" Pid.pp (self ()));
