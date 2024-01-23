@@ -1,14 +1,16 @@
 open Riot
 
 module Echo_server = struct
+  include Trail.Sock.Default
+
   type args = unit
   type state = int
 
-  let init conn _args = `continue (conn, 0)
+  let init _args = `ok 0
 
-  let handle_frame frame _conn _state =
+  let handle_frame frame _conn state =
     Logger.info (fun f -> f "handling frame: %a" Trail.Frame.pp frame);
-    `push [ frame ]
+    `push ([ frame ], state)
 end
 
 let trail =

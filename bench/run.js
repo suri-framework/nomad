@@ -1,6 +1,6 @@
 const WebSocket = require("ws")
 
-let ws = new WebSocket("ws://0.0.0.0:2118/ws")
+let ws = new WebSocket("wss://bazaar.fly.dev/ws")
 
 ws.on("open", () => {
   console.log("opened");

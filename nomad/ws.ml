@@ -79,11 +79,22 @@ let handle_data data conn state =
          match[@warning "-8"]
            Trail.Sock.handle_frame state.handler frame conn
          with
-         | `push frames ->
+         | `push (frames, handler) ->
+             let state = { state with handler } in
              send_frames state conn frames (`continue (Continue state))
-         | `continue conn -> `continue (Continue { state with conn })
+         | `continue (conn, handler) -> `continue (Continue { state with conn; handler})
          | `close conn -> `halt (Close { state with conn })
          | `error (conn, reason) -> `halt (Error ({ state with conn }, reason)))
      | `more buffer, Continue state -> `halt (Continue { state with buffer })
      | `error reason, Continue state -> `halt (Error (state, reason))
      | _, _ -> failwith "Unexpected_frame_parsing_error"
+
+let handle_message msg conn state =
+  match Trail.Sock.handle_message state.handler msg conn with
+  | `continue (conn, handler) -> Continue { state with conn; handler }
+  | `error (conn, reason) -> Error ({ state with conn }, reason)
+  | `push (frames, handler) -> (
+    let state = { state with handler } in
+      match send_frames state conn frames (`continue (Continue state)) with
+      | `continue cont -> cont
+      | `halt res -> res)
