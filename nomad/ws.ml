@@ -82,7 +82,8 @@ let handle_data data conn state =
          | `push (frames, handler) ->
              let state = { state with handler } in
              send_frames state conn frames (`continue (Continue state))
-         | `continue (conn, handler) -> `continue (Continue { state with conn; handler})
+         | `continue (conn, handler) ->
+             `continue (Continue { state with conn; handler })
          | `close conn -> `halt (Close { state with conn })
          | `error (conn, reason) -> `halt (Error ({ state with conn }, reason)))
      | `more buffer, Continue state -> `halt (Continue { state with buffer })
@@ -94,7 +95,7 @@ let handle_message msg conn state =
   | `continue (conn, handler) -> Continue { state with conn; handler }
   | `error (conn, reason) -> Error ({ state with conn }, reason)
   | `push (frames, handler) -> (
-    let state = { state with handler } in
+      let state = { state with handler } in
       match send_frames state conn frames (`continue (Continue state)) with
       | `continue cont -> cont
       | `halt res -> res)
