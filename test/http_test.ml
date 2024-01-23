@@ -3,19 +3,18 @@
 open Riot
 open Trail
 
-module Logger = Logger.Make (struct
-  let namespace = [ "http_test" ]
+open Riot.Logger.Make (struct
+  let namespace = [ "nomad"; "http_test" ]
 end)
 
 module Test : Application.Intf = struct
   let start () =
-    Logger.set_log_level (Some Info);
+    set_log_level (Some Info);
     sleep 0.1;
-    Logger.info (fun f -> f "starting nomad server");
+    info (fun f -> f "starting nomad server");
 
     let hello_world (conn : Conn.t) =
-      Logger.debug (fun f ->
-          f "http_test.path: %S" (String.concat "." conn.req.path));
+      debug (fun f -> f "http_test.path: %S" (String.concat "." conn.req.path));
       match conn.req.path with
       | [] -> conn |> Conn.send_response `OK {%b|"hello world"|}
       | [ "echo_method" ] ->
@@ -128,7 +127,7 @@ module Test : Application.Intf = struct
           conn |> Conn.chunk {%b|"NOT OK"|}
       | [ "send_file" ] ->
           let query = Uri.query conn.req.uri in
-          Logger.debug (fun f -> f "%S" (Uri.encoded_of_query query));
+          debug (fun f -> f "%S" (Uri.encoded_of_query query));
           let off = List.assoc "offset" query |> List.hd |> int_of_string in
           let len = List.assoc "length" query |> List.hd |> int_of_string in
           conn
@@ -163,7 +162,7 @@ module Test : Application.Intf = struct
           let content_length =
             Http.Header.get conn.req.headers "content-length" |> Option.get
           in
-          Logger.debug (fun f -> f "content_length: %s" content_length);
+          debug (fun f -> f "content_length: %s" content_length);
           let expected_body =
             List.init 800000 (fun _ -> "0123456789") |> String.concat ""
           in
@@ -171,7 +170,7 @@ module Test : Application.Intf = struct
             Conn.read_body conn
           in
           let actual_body = Bytestring.to_string actual_body in
-          Logger.debug (fun f -> f "actual_ %d" (String.length actual_body));
+          debug (fun f -> f "actual_ %d" (String.length actual_body));
           assert (String.equal content_length expected_content_length);
           assert (String.equal actual_body expected_body);
           conn |> Conn.send_response `OK {%b|"OK"|}
@@ -180,7 +179,7 @@ module Test : Application.Intf = struct
           let content_length =
             Http.Header.get conn.req.headers "content-length" |> Option.get
           in
-          Logger.debug (fun f -> f "content_length: %s" content_length);
+          debug (fun f -> f "content_length: %s" content_length);
           let expected_body =
             List.init 8_000_000 (fun _ -> "a") |> String.concat ""
           in
@@ -188,7 +187,7 @@ module Test : Application.Intf = struct
             Conn.read_body conn
           in
           let actual_body = Bytestring.to_string actual_body in
-          Logger.debug (fun f -> f "actual_ %d" (String.length actual_body));
+          debug (fun f -> f "actual_ %d" (String.length actual_body));
           assert (String.equal content_length expected_content_length);
           assert (String.equal actual_body expected_body);
           conn |> Conn.send_response `OK {%b|"OK"|}
@@ -210,17 +209,14 @@ module Test : Application.Intf = struct
           in
           conn |> Conn.send_response `OK body
       | "multiple_body_read" :: [] ->
-          Logger.debug (fun f -> f "multiple_body_read");
-          Logger.debug (fun f ->
-              f "multiple_body_read: %d" conn.req.body_remaining);
+          debug (fun f -> f "multiple_body_read");
+          debug (fun f -> f "multiple_body_read: %d" conn.req.body_remaining);
           let[@warning "-8"] (Conn.Ok (conn, body)) = Conn.read_body conn in
-          Logger.debug (fun f ->
-              f "multiple_body_read: %d" conn.req.body_remaining);
+          debug (fun f -> f "multiple_body_read: %d" conn.req.body_remaining);
           let[@warning "-8"] (Conn.Error (conn, _reason)) =
             Conn.read_body conn
           in
-          Logger.debug (fun f ->
-              f "multiple_body_read: %d" conn.req.body_remaining);
+          debug (fun f -> f "multiple_body_read: %d" conn.req.body_remaining);
           conn |> Conn.send_response `OK body
       | "expect_chunked_body" :: [] ->
           let transfer_encoding =
@@ -233,7 +229,7 @@ module Test : Application.Intf = struct
           let expected_body =
             List.init 8_000_000 (fun _ -> "a") |> String.concat ""
           in
-          Logger.debug (fun f -> f "actual_ %d" (String.length actual_body));
+          debug (fun f -> f "actual_ %d" (String.length actual_body));
           assert (String.equal transfer_encoding "chunked");
           assert (String.equal actual_body expected_body);
           conn |> Conn.send_response `OK {%b|"OK"|}
@@ -251,8 +247,12 @@ module Test : Application.Intf = struct
       | _ -> failwith "not implemented"
     in
 
-    let handler = Nomad.trail [ Trail.logger ~level:Debug (); hello_world ] in
+    let handler =
+      Nomad.trail
+        Trail.[ use (module Logger) Logger.(args ~level:Debug ()); hello_world ]
+    in
 
+    Runtime.Stats.start ~every:2_000_000L ();
     Nomad.start_link
       ~transport:
         Atacama.Transport.(

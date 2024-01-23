@@ -138,9 +138,7 @@ module Parser = struct
           do_parse_headers max_count max_length rest acc
 
   and parse_header h rest =
-    let clean s =
-      String.(s |> Bitstring.string_of_bitstring |> lowercase_ascii |> trim)
-    in
+    let clean s = String.(s |> Bitstring.string_of_bitstring |> trim) in
     let v, rest = until "\r\n" rest in
     let h = clean h in
     let v = clean v in
@@ -181,7 +179,7 @@ let make ~are_we_tls ~sniffed_data ~handler ~config () =
   }
 
 let handle_connection _conn state =
-  info (fun f -> f "switched to http1");
+  debug (fun f -> f "switched to http1");
   Continue state
 
 module StringSet = Set.Make (String)
@@ -261,7 +259,7 @@ let maybe_keep_alive state conn (req : Trail.Request.t) =
   else Close state
 
 let handle_request state conn req =
-  info (fun f -> f "handle_request: %a" Trail.Request.pp req);
+  debug (fun f -> f "handle_request: %a" Trail.Request.pp req);
   match state.handler conn req with
   | Handler.Close _conn -> maybe_keep_alive state conn req
   | Handler.Upgrade (`websocket (upgrade_opts, handler)) ->

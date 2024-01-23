@@ -2,7 +2,7 @@ open Riot
 open Atacama.Handler
 include Atacama.Handler.Default
 
-module Logger = Logger.Make (struct
+open Riot.Logger.Make (struct
   let namespace = [ "nomad"; "ws" ]
 end)
 
@@ -49,8 +49,8 @@ let handshake (req : Trail.Request.t) conn state =
   state
 
 let handle_connection conn state =
-  Logger.debug (fun f -> f "switched to ws");
-  Logger.info (fun f -> f "Request: %a" Trail.Request.pp state.req);
+  debug (fun f -> f "switched to ws");
+  info (fun f -> f "Request: %a" Trail.Request.pp state.req);
   match Trail.Sock.init state.handler conn with
   | `continue (conn, handler) -> Continue { state with conn; handler }
   | `error (conn, reason) -> Error ({ state with conn }, reason)
@@ -63,11 +63,11 @@ let rec send_frames state conn frames return =
       match Atacama.Connection.send conn data with
       | Ok _n -> send_frames state conn frames return
       | Error `Eof ->
-          Logger.error (fun f -> f "ws.error: end of file");
+          error (fun f -> f "ws.error: end of file");
           `halt (Close state)
       | Error ((`Closed | `Timeout | `Process_down | `Unix_error _ | _) as err)
         ->
-          Logger.error (fun f -> f "ws.error: %a" IO.pp_err err);
+          error (fun f -> f "ws.error: %a" IO.pp_err err);
           `halt (Close state))
 
 let handle_data data conn state =

@@ -1,11 +1,9 @@
 open Riot
 open Trail
 
-module Logger = Logger.Make (struct
+open Riot.Logger.Make (struct
   let namespace = [ "nomad"; "http1"; "adapter" ]
 end)
-
-open Logger
 
 let ( let* ) = Result.bind
 
@@ -165,7 +163,7 @@ let send conn (req : Request.t) (res : Response.t) =
           let now =
             Format.sprintf "%s, %02d %s %d %02d:%02d:%02d GMT" day d mon y h m s
           in
-          Logger.debug (fun f -> f "Adding date header: %S" now);
+          debug (fun f -> f "Adding date header: %S" now);
           Http.Header.add headers "date" now
     in
 
@@ -196,8 +194,7 @@ let send conn (req : Request.t) (res : Response.t) =
     in
 
     debug (fun f -> f "res: %S" (Bytestring.to_string buf));
-    Atacama.Connection.send conn buf
-    |> Result.get_ok
+    Atacama.Connection.send conn buf |> Result.get_ok
 
 let send_chunk conn (req : Request.t) buf =
   if req.meth = `HEAD then ()

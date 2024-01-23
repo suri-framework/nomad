@@ -5,9 +5,9 @@ open Trail
 
 module Test : Application.Intf = struct
   let start () =
-    Logger.set_log_level (Some Debug);
+    Riot.Logger.set_log_level (Some Debug);
     sleep 0.1;
-    Logger.info (fun f -> f "starting nomad server");
+    Riot.Logger.info (fun f -> f "starting nomad server");
 
     let hello_world conn =
       conn |> Conn.send_response `OK {%b| "hello world" |}
@@ -18,4 +18,4 @@ module Test : Application.Intf = struct
     Nomad.start_link ~port:2112 ~handler ()
 end
 
-let () = Riot.start ~apps:[ (module Logger); (module Test) ] ()
+let () = Riot.start ~apps:[ (module Riot.Logger); (module Test) ] ()
