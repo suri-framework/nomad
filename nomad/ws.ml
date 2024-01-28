@@ -59,7 +59,7 @@ let rec send_frames state conn frames return =
   match frames with
   | [] -> return
   | frame :: frames -> (
-      let data = Trail.Frame.serialize frame in
+      let data = Trail.Frame.Response.serialize frame in
       match Atacama.Connection.send conn data with
       | Ok _n -> send_frames state conn frames return
       | Error `Eof ->
@@ -73,10 +73,11 @@ let rec send_frames state conn frames return =
 let handle_data data conn state =
   let data = Bytestring.(to_string (state.buffer ^ data)) in
   debug (fun f -> f "handling data: %d bytes" (String.length data));
-  Stream.unfold Trail.Frame.deserialize data
+  Stream.unfold Trail.Frame.Request.deserialize data
   |> Stream.reduce_while (Continue state) @@ fun frame state ->
      match (frame, state) with
      | `ok frame, Continue state -> (
+         debug (fun f -> f "handling frame: %a" Trail.Frame.pp frame);
          match[@warning "-8"]
            Trail.Sock.handle_frame state.handler frame conn
          with
