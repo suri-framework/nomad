@@ -71,7 +71,8 @@ let rec send_frames state conn frames return =
           `halt (Close state))
 
 let handle_data data conn state =
-  let data = Bytestring.to_string state.buffer ^ Bytestring.to_string data in
+  let data = Bytestring.(to_string (state.buffer ^ data)) in
+  debug (fun f -> f "handling data: %d bytes" (String.length data));
   Stream.unfold Trail.Frame.deserialize data
   |> Stream.reduce_while (Continue state) @@ fun frame state ->
      match (frame, state) with
