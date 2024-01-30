@@ -81,7 +81,6 @@ let has_no_transform (res : Response.t) =
 let maybe_compress (req : Request.t) buf =
   if Bytestring.length buf = 0 then (None, None)
   else (
-    debug (fun f -> f "body: %s" (Bytestring.to_string buf));
     let accepted_encodings =
       Http.Header.get req.headers "accept-encoding"
       |> Option.map (fun enc -> String.split_on_char ',' enc)
@@ -163,7 +162,7 @@ let send conn (req : Request.t) (res : Response.t) =
           let now =
             Format.sprintf "%s, %02d %s %d %02d:%02d:%02d GMT" day d mon y h m s
           in
-          debug (fun f -> f "Adding date header: %S" now);
+          trace (fun f -> f "Adding date header: %S" now);
           Http.Header.add headers "date" now
     in
 
@@ -193,7 +192,6 @@ let send conn (req : Request.t) (res : Response.t) =
       Bytestring.of_string s
     in
 
-    debug (fun f -> f "res: %S" (Bytestring.to_string buf));
     Atacama.Connection.send conn buf |> Result.get_ok
 
 let send_chunk conn (req : Request.t) buf =
@@ -203,7 +201,7 @@ let send_chunk conn (req : Request.t) buf =
       Format.sprintf "%x\r\n%s\r\n" (Bytestring.length buf)
         (Bytestring.to_string buf)
     in
-    debug (fun f -> f "sending chunk: %S" chunk);
+    trace (fun f -> f "sending chunk: %S" chunk);
     let chunk = Bytestring.of_string chunk in
     let _ = Atacama.Connection.send conn chunk in
     ()
@@ -249,55 +247,55 @@ open Trail
 let rec read_body ?limit ?(read_size = 1_024 * 1_024) conn (req : Request.t) =
   match Request.body_encoding req with
   | Http.Transfer.Chunked -> (
-      debug (fun f -> f "reading chunked body");
+      trace (fun f -> f "reading chunked body");
       match
         read_chunked_body ~read_size ~buffer:req.buffer ~body:Bytestring.empty
           conn req
       with
       | Ok (body, buffer) ->
-          debug (fun f ->
+          trace (fun f ->
               f "read chunked_body: buffer=%d" (Bytestring.length buffer));
           Adapter.Ok ({ req with buffer }, body)
       | Error reason -> Adapter.Error (req, reason))
   | _ -> (
-      debug (fun f -> f "reading content-length body");
+      trace (fun f -> f "reading content-length body");
       match read_content_length_body ?limit ~read_size conn req with
       | Ok (body, buffer, body_remaining) ->
-          debug (fun f ->
+          trace (fun f ->
               f "read chunked_body: body_remaning=%d buffer=%d" body_remaining
                 (Bytestring.length buffer));
           let req = { req with buffer; body_remaining } in
           if body_remaining = 0 && Bytestring.length buffer = 0 then (
-            debug (fun f -> f "read chunked_body: ok");
+            trace (fun f -> f "read chunked_body: ok");
             let req = { req with buffer; body_remaining = -1 } in
             Adapter.Ok (req, body))
           else (
-            debug (fun f -> f "read chunked_body: more");
+            trace (fun f -> f "read chunked_body: more");
             Adapter.More (req, body))
       | Error reason -> Adapter.Error (req, reason))
 
 and read_chunked_body ~read_size ~buffer ~body conn req =
   let parts = split buffer in
-  debug (fun f -> f "body_size: %d" (Bytestring.length body));
-  debug (fun f -> f "buffer: %d" (Bytestring.length buffer));
-  debug (fun f ->
+  trace (fun f -> f "body_size: %d" (Bytestring.length body));
+  trace (fun f -> f "buffer: %d" (Bytestring.length buffer));
+  trace (fun f ->
       f "total_read: %d" (Bytestring.length buffer + Bytestring.length body));
-  debug (fun f ->
+  trace (fun f ->
       match parts with
       | size :: _ -> f "chunk_size: 0x%s" (Bytestring.to_string size)
       | _ -> ());
 
   match parts with
   | [ zero; _ ] when String.equal (Bytestring.to_string zero) "0" ->
-      debug (fun f -> f "read_chunked_body: last chunk!");
+      trace (fun f -> f "read_chunked_body: last chunk!");
       Ok (body, buffer)
   | [ chunk_size; chunk_data ] -> (
       let chunk_size =
         Int64.(of_string ("0x" ^ Bytestring.to_string chunk_size) |> to_int)
       in
-      debug (fun f -> f "read_chunked_body: chunk_size=%d" chunk_size);
+      trace (fun f -> f "read_chunked_body: chunk_size=%d" chunk_size);
       let binstr_data = Bytestring.to_string chunk_data in
-      debug (fun f ->
+      trace (fun f ->
           f "read_chunked_body: (%d bytes)" (String.length binstr_data));
       let binstr_data = binstr_data |> Bitstring.bitstring_of_string in
       match%bitstring binstr_data with
@@ -305,8 +303,8 @@ and read_chunked_body ~read_size ~buffer ~body conn req =
            "\r\n" : 2 * 8 : string ;
            rest : -1 : bitstring |}
         ->
-          debug (fun f -> f "read_chunked_body: read full chunk");
-          debug (fun f ->
+          trace (fun f -> f "read_chunked_body: read full chunk");
+          trace (fun f ->
               f "read_chunked_body: rest=%d" (Bitstring.bitstring_length rest));
           let rest =
             Bytestring.of_string (Bitstring.string_of_bitstring rest)
@@ -316,7 +314,7 @@ and read_chunked_body ~read_size ~buffer ~body conn req =
           read_chunked_body ~read_size ~buffer:rest ~body conn req
       | {| _ |} ->
           let left_to_read = chunk_size - Bytestring.length chunk_data in
-          debug (fun f ->
+          trace (fun f ->
               f "read_chunked_body: reading more data left_to_read=%d"
                 left_to_read);
           let* chunk =
@@ -326,7 +324,7 @@ and read_chunked_body ~read_size ~buffer ~body conn req =
           let buffer = Bytestring.join buffer chunk in
           read_chunked_body ~read_size ~buffer ~body conn req)
   | _ ->
-      debug (fun f -> f "read_chunked_body: need more data");
+      trace (fun f -> f "read_chunked_body: need more data");
       let* chunk = Atacama.Connection.receive conn in
       let buffer = Bytestring.join buffer chunk in
       read_chunked_body ~read_size ~buffer ~body conn req
@@ -335,15 +333,15 @@ and read_content_length_body ?limit ~read_size conn req =
   let buffer = req.buffer in
   let limit = Option.value ~default:req.body_remaining limit in
   let to_read = limit - Bytestring.length buffer in
-  debug (fun f ->
+  trace (fun f ->
       f "read_content_length_body: up to limit=%d with preread_buffer=%d" limit
         (Bytestring.length buffer));
   match req.body_remaining with
   | n when n < 0 || to_read < 0 ->
-      debug (fun f -> f "read_content_length_body: excess body");
+      trace (fun f -> f "read_content_length_body: excess body");
       Error `Excess_body_read
   | 0 when Bytestring.length buffer >= limit ->
-      debug (fun f -> f "read_content_length_body: can answer with buffer");
+      trace (fun f -> f "read_content_length_body: can answer with buffer");
       let len = Int.min limit (Bytestring.length buffer) in
       let body = Bytestring.sub ~off:0 ~len buffer in
       Ok (body, Bytestring.empty, 0)
@@ -351,7 +349,7 @@ and read_content_length_body ?limit ~read_size conn req =
       let to_read =
         Int.min (limit - Bytestring.length buffer) remaining_bytes
       in
-      debug (fun f -> f "read_content_length_body: need to read %d" to_read);
+      trace (fun f -> f "read_content_length_body: need to read %d" to_read);
       let* chunk = read ~to_read ~read_size conn in
       let body = Bytestring.join buffer chunk in
       let body_remaining = remaining_bytes - Bytestring.length body in
@@ -363,8 +361,8 @@ and read ~read_size ~to_read ?(buffer = Bytestring.empty) conn =
     let* chunk = Atacama.Connection.receive ~limit:to_read ~read_size conn in
     let remaining_bytes = to_read - Bytestring.length chunk in
     let buffer = Bytestring.join buffer chunk in
-    debug (fun f -> f "read: remaining_bytes %d" remaining_bytes);
-    debug (fun f -> f "read: buffer=%d" (Bytestring.length buffer));
+    trace (fun f -> f "read: remaining_bytes %d" remaining_bytes);
+    trace (fun f -> f "read: buffer=%d" (Bytestring.length buffer));
     if remaining_bytes > 0 then
       read ~read_size ~to_read:remaining_bytes ~buffer conn
     else Ok buffer

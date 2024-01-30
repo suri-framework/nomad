@@ -132,7 +132,7 @@ module Parser = struct
           (* ...anything else is probably a bad request *)
           | {| _ |} -> raise_notrace Bad_request)
       | h, data ->
-          debug (fun f -> f "found header %s" (Bitstring.string_of_bitstring h));
+          trace (fun f -> f "found header %s" (Bitstring.string_of_bitstring h));
           let header, rest = parse_header h data in
           let acc = header :: acc in
           do_parse_headers max_count max_length rest acc
@@ -179,7 +179,7 @@ let make ~are_we_tls ~sniffed_data ~handler ~config () =
   }
 
 let handle_connection _conn state =
-  debug (fun f -> f "switched to http1");
+  trace (fun f -> f "switched to http1");
   Continue state
 
 module StringSet = Set.Make (String)
@@ -259,7 +259,7 @@ let maybe_keep_alive state conn (req : Trail.Request.t) =
   else Close state
 
 let handle_request state conn req =
-  debug (fun f -> f "handle_request: %a" Trail.Request.pp req);
+  trace (fun f -> f "handle_request: %a" Trail.Request.pp req);
   match state.handler conn req with
   | Handler.Close _conn -> maybe_keep_alive state conn req
   | Handler.Upgrade (`websocket (upgrade_opts, handler)) ->
@@ -267,7 +267,7 @@ let handle_request state conn req =
       let state = Ws.handshake req conn state in
       Switch (H { handler = (module Ws); state })
   | Handler.Upgrade `h2c ->
-      debug (fun f -> f "upgrading to h2c");
+      trace (fun f -> f "upgrading to h2c");
       let state = Http2.make ~handler:state.handler ~conn () in
       let state = Http2.handshake req conn state in
       Switch (H { handler = (module Http2); state })

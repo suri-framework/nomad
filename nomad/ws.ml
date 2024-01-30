@@ -72,12 +72,12 @@ let rec send_frames state conn frames return =
 
 let handle_data data conn state =
   let data = Bytestring.(to_string (state.buffer ^ data)) in
-  debug (fun f -> f "handling data: %d bytes" (String.length data));
+  trace (fun f -> f "handling data: %d bytes" (String.length data));
   Stream.unfold Trail.Frame.Request.deserialize data
   |> Stream.reduce_while (Continue state) @@ fun frame state ->
      match (frame, state) with
      | `ok frame, Continue state -> (
-         debug (fun f -> f "handling frame: %a" Trail.Frame.pp frame);
+         trace (fun f -> f "handling frame: %a" Trail.Frame.pp frame);
          match[@warning "-8"]
            Trail.Sock.handle_frame state.handler frame conn
          with

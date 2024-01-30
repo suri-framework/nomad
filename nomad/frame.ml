@@ -502,7 +502,7 @@ let continuation t = Continuation t
 let empty_settings = settings Settings.empty
 
 let make ~type_ ~flags ~stream_id ~payload =
-  Logger.debug (fun f -> f "Frame type=%d" type_);
+  Logger.trace (fun f -> f "Frame type=%d" type_);
   let result =
     match type_ with
     | 0x0 -> Data.make ~flags ~stream_id ~payload |> Result.map data
@@ -577,5 +577,5 @@ let serialize frame =
     |> Bitstring.concat
   in
   let frames = Bitstring.string_of_bitstring frames in
-  Logger.debug (fun f -> f "htt2.frame.serialize %S" frames);
+  Logger.trace (fun f -> f "htt2.frame.serialize %S" frames);
   Bytestring.of_string frames
