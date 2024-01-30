@@ -11,15 +11,16 @@ bug-reports: "https://github.com/leostera/nomad/issues"
 depends: [
   "dune" {>= "3.10"}
   "atacama" {>= "0.0.4"}
-  "trail" {>= "0.0.1"}
   "bitstring" {>= "4.1.0"}
   "decompress" {>= "1.5.3"}
+  "digestif" {>= "1.1.4"}
+  "httpaf" {>= "0.7.1"}
   "ocaml" {>= "5.1.0"}
   "ppx_bitstring" {>= "4.1.0"}
   "riot" {>= "0.0.7"}
-  "uutf" {>= "1.0.3"}
-  "digestif" {>= "1.1.4"}
   "telemetry" {>= "0.0.1"}
+  "trail" {>= "0.0.1"}
+  "uutf" {>= "1.0.3"}
   "odoc" {with-doc}
 ]
 build: [
