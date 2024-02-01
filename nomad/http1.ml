@@ -39,6 +39,7 @@ module Parser = struct
                     ])
               in
               go char rest (len + 8)
+        | {| _ |} -> raise_notrace Need_more_data
     in
     let len, rest = go char data 0 in
     let captured = Bitstring.subbitstring data 0 len in
