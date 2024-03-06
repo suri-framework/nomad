@@ -41,6 +41,7 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    needs: build
     services:
       test_server:
         image: ghcr.io/francoganga/nomad:autobahn_ci
