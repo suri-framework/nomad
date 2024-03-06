@@ -47,8 +47,11 @@ jobs:
         ports:
           - 2112:2112
     steps:
-      - name: Checkout tree
-        uses: actions/checkout@v4
-      - 
-        name: autobahn
-        run: test/autobahn/run
+    - name: Checkout code
+      uses: actions/checkout@v4
+    container:
+      image: crossbario/autobahn-testsuite
+      volumes:
+        - "${PWD}/test/autobahn/fuzzingclient.json:/fuzzingclient.json"
+        - "${PWD}/_build/reports:/reports" 
+
