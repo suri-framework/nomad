@@ -53,6 +53,6 @@ jobs:
     container:
       image: crossbario/autobahn-testsuite
       volumes:
-        - "${PWD}/test/autobahn/fuzzingclient.json:/fuzzingclient.json"
-        - "${PWD}/_build/reports:/reports" 
+        - "$(pwd)/test/autobahn/fuzzingclient.json:/fuzzingclient.json"
+        - "$(pwd)/_build/reports:/reports" 
 
