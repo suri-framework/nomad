@@ -2,7 +2,7 @@ FROM alpine
 
 RUN apk add opam git musl-dev make m4 gcc bubblewrap bash coreutils pkgconfig openssl-libs-static openssl-dev gmp-dev
 RUN opam init --disable-sandboxing
-RUN opam install -y ocaml-base-compiler dune
+RUN opam install -y dune
 
 WORKDIR /app
 
