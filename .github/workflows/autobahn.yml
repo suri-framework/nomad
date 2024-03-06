@@ -1,0 +1,73 @@
+name: Autobahn
+
+on:
+  [pull_request, push]
+
+permissions: read-all
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-latest
+          - ubuntu-latest
+        ocaml-compiler:
+          - "5.1"
+        allow-prerelease-opam:
+          - true
+        opam-repositories:
+          - |-
+            default: https://github.com/ocaml/opam-repository.git
+        # include:
+        #   - os: windows-latest
+        #     ocaml-compiler: ocaml-variants.5.1.0+options,ocaml-option-mingw
+        #     allow-prerelease-opam: false
+        #     opam-repositories: |-
+        #       windows-5.0: https://github.com/dra27/opam-repository.git#windows-5.0
+        #       sunset: https://github.com/ocaml-opam/opam-repository-mingw.git#sunset
+        #       default: https://github.com/ocaml/opam-repository.git
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout tree
+        uses: actions/checkout@v4
+
+      - name: Set-up OCaml
+        uses: ocaml/setup-ocaml@v2
+        with:
+          ocaml-compiler: ${{ matrix.ocaml-compiler }}
+          allow-prerelease-opam: ${{ matrix.allow-prerelease-opam }}
+          opam-repositories: ${{ matrix.opam-repositories }}
+
+
+      - name: Retrieve mix dependencies cache
+        uses: actions/cache@v4
+        id: opam-cache
+        with:
+          path: |
+            _opam
+            _build
+          key: ${{ runner.os }}-opam
+
+      - name: install dependencies
+        if: steps.opam-cache.outputs.cache-hit != 'true'
+        run: |
+          opam pin atacama.0.0.5 git+https://github.com/suri-framework/atacama -y
+          opam pin trail git+https://github.com/suri-framework/trail -y
+
+          opam install . --deps-only --with-test
+
+      - run: opam exec -- dune build test/autobahn/server.exe
+
+      - run: |
+          _build/default/test/autobahn/server.exe&
+          sleep 1 &&
+          test/autobahn/run
+      - name: upload reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: report.html
+          path: _build/reports/clients/index.html
