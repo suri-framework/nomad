@@ -26,7 +26,7 @@ jobs:
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
-        uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
+        uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
@@ -38,3 +38,17 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  test:
+    runs-on: ubuntu-latest
+    services:
+      test_server:
+        image: ghcr.io/francoganga/nomad:autobahn_ci
+        ports:
+          - 2112:2112
+    steps:
+      - name: Checkout tree
+        uses: actions/checkout@v4
+      - 
+        name: autobahn
+        run: test/autobahn/run
