@@ -5,54 +5,53 @@ on:
 
 permissions: read-all
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
-
 jobs:
   build:
+    strategy:
+      fail-fast: false
+      matrix:
+        ocaml-compiler:
+          - "5.1"
+        allow-prerelease-opam:
+          - true
+        opam-repositories:
+          - |-
+            default: https://github.com/ocaml/opam-repository.git
+        # include:
+        #   - os: windows-latest
+        #     ocaml-compiler: ocaml-variants.5.1.0+options,ocaml-option-mingw
+        #     allow-prerelease-opam: false
+        #     opam-repositories: |-
+        #       windows-5.0: https://github.com/dra27/opam-repository.git#windows-5.0
+        #       sunset: https://github.com/ocaml-opam/opam-repository-mingw.git#sunset
+        #       default: https://github.com/ocaml/opam-repository.git
+
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
+
     steps:
-      -
-        name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+      - name: Checkout tree
+        uses: actions/checkout@v4
+
+      - name: Set-up OCaml
+        uses: ocaml/setup-ocaml@v2
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          ocaml-compiler: ${{ matrix.ocaml-compiler }}
+          allow-prerelease-opam: ${{ matrix.allow-prerelease-opam }}
+          opam-repositories: ${{ matrix.opam-repositories }}
 
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@v5
+      - name: install dependencies
+        run: |
+          opam pin atacama.0.0.5 git+https://github.com/suri-framework/atacama -y
+          opam pin trail git+https://github.com/suri-framework/trail -y
+
+          opam install . --deps-only --with-test
+
+      - run: opam exec -- dune build test/autobahn/server.exe
+
+      - run: _build/default/test/autobahn/server.exe
+
+      - name: upload reports
+        uses: actions/upload-artifact@v4
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-
-      - 
-        name: Build and push
-        uses: docker/build-push-action@v5
-        with:
-          file: test/autobahn/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-
-  test:
-    runs-on: ubuntu-latest
-    needs: build
-    services:
-      test_server:
-        image: ghcr.io/francoganga/nomad:autobahn_ci
-        ports:
-          - 2112:2112
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    container:
-      image: crossbario/autobahn-testsuite
-      volumes:
-        - "${{github.workspace}}/test/autobahn/fuzzingclient.json:/fuzzingclient.json"
-        - "${{github.workspace}}/_build/reports:/reports" 
-
+          name: report.html
+          path: _build/reports/clients/index.html
