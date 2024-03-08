@@ -6,7 +6,7 @@ on:
 permissions: read-all
 
 jobs:
-  build:
+  autobahn:
     strategy:
       fail-fast: false
       matrix:
@@ -46,9 +46,7 @@ jobs:
 
           opam install . --deps-only --with-test
 
-      - run: opam exec -- dune build test/autobahn/server.exe
-
-      - run: _build/default/test/autobahn/server.exe
+      - run: opam exec -- dune exec test/autobahn/server.exe
 
       - name: upload reports
         uses: actions/upload-artifact@v4
