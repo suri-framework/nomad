@@ -30,35 +30,31 @@ module Test : Riot.Application.Intf = struct
       conn |> Trail.Conn.upgrade (`websocket (upgrade_opts, handler))
     in
 
-    let handler = Nomad.trail [ws_echo] in
+    let handler = Nomad.trail [ ws_echo ] in
 
     Nomad.start_link ~port:2112 ~handler ()
 end
 
-module Autobahn  = struct
+module Utils = struct
 
     let get_cwd () =
         try
-            Unix.getcwd ()
+            Ok(Unix.getcwd ())
         with
-        | Unix.Unix_error (err, _, _) ->
-                Printf.eprintf "Could not get current directory: %s\n" (Unix.error_message err);
-                exit 1
+        | Unix.Unix_error (_, _, _) ->
+            Error "Failed to get current working directory"
 
 
 
-    let launch server_pid () = 
-        Riot.link server_pid;
+    let init () = 
+        let (let*) = Result.bind in
 
-        let open Unix in
-        
-        let cwd = get_cwd () in
+        let* cwd = get_cwd () in
         
         let config_volume = Filename.concat cwd "/test/autobahn/fuzzingclient.json:/fuzzingclient.json" in
         let reports_volume = Filename.concat cwd "/_build/reports:/reports" in
         
-        let cmd = "docker" in
-        let args = [|
+        let args = [
             "docker";
             "run";
 			 "--rm";
@@ -75,41 +71,39 @@ module Autobahn  = struct
 			 "fuzzingclient";
 			 "-w";
 			 "ws://0.0.0.0:2112"
-        |] in
-        
-        let pid = Unix.create_process cmd args stdin stdout stderr in
-        
-        let _, status = Unix.waitpid [] pid in
-        
-        match status with
-        | _ -> 
-                (* the docker image always exits with 0, so if exits stop the server *)
-                Riot.Logger.info (fun f -> f "autobahn exited");
-                Riot.(exit server_pid Normal);
-                ()
+        ] in
 
+        let path =
+            match Sys.getenv_opt "PATH" with
+            | None -> []
+            | exception Not_found -> []
+            | Some s -> String.split_on_char ':' s in
 
-    let start server_pid =
-        let open Riot in
-        let pid = spawn @@ launch server_pid in
-        Ok pid
+        let find_prog prog =
+            let rec search = function
+                | [] -> None
+                | x :: xs ->
+                        let prog = Filename.concat x prog in
+                        if Sys.file_exists prog then Some prog else search xs in
+            search path in
+
+        match find_prog "docker" with
+        | None -> Error "Failed to find docker executable in PATH"
+        | Some prog -> 
+                let process () =
+                    let pid = Spawn.spawn ~prog ~argv:args ~stdin:Unix.stdin ~stdout:Unix.stdout ~stderr:Unix.stderr () in
+                    Riot.(Logger.info (fun f -> f "Spawed docker with pid %d" pid));
+                in
+                Ok process
 end
 
-let () = Riot.run @@ fun () ->
-    let (let*) = Result.bind in
+module Autobahn : Riot.Application.Intf = struct
 
-    let launch () =
-        let* logger_pid = Riot.Logger.start () in
-        let* server_pid = Test.start () in
-        (* if i dont wait a little bit autobahn gets weird and hangs forever *)
-        Unix.sleep 2;
-        let* autobahn_pid = Autobahn.start server_pid in
-        Riot.Logger.info (fun f -> f "started autobahn pid: %a" Riot.Pid.pp autobahn_pid);
+    let start () =
+        let process = Utils.init () in
+        match process with
+        | Ok p -> Ok (Riot.spawn p)
+        | Error err -> Error (`Application_error err)
+end
 
-        Riot.wait_pids [ logger_pid; server_pid; autobahn_pid ];
-
-        Ok () in
-
-    match launch () with
-    | Ok () -> ()
-    | Error _ -> Riot.shutdown ()
+let () = Riot.start ~apps:[ (module Riot.Logger); (module Test) ;(module Autobahn) ] ()
