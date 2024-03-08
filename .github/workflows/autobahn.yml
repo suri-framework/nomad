@@ -45,6 +45,7 @@ jobs:
           opam pin trail git+https://github.com/suri-framework/trail -y
 
           opam install . --deps-only --with-test
+          opam install spawn -y
 
       - run: opam exec -- dune exec test/autobahn/server.exe
 
