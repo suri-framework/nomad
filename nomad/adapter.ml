@@ -80,7 +80,7 @@ let has_no_transform (res : Response.t) =
 
 let maybe_compress (req : Request.t) buf =
   if Bytestring.length buf = 0 then (None, None)
-  else (
+  else
     let accepted_encodings =
       Http.Header.get req.headers "accept-encoding"
       |> Option.map (fun enc -> String.split_on_char ',' enc)
@@ -92,7 +92,7 @@ let maybe_compress (req : Request.t) buf =
     if accepts_deflate then (Some (deflate buf), Some "deflate")
     else if accepts_gzip then (Some (gzip buf), Some "gzip")
     else if accepts_x_gzip then (Some (gzip buf), Some "x-gzip")
-    else (Some buf, None))
+    else (Some buf, None)
 
 let send conn (req : Request.t) (res : Response.t) =
   if req.version = `HTTP_1_0 && res.status = `Continue then ()
