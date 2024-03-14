@@ -40,28 +40,7 @@ end
 
 module Autobahn = struct
   let spawn_docker args =
-    let path =
-      match Sys.getenv_opt "PATH" with
-      | None -> []
-      | exception Not_found -> []
-      | Some s -> String.split_on_char ':' s
-    in
-
-    let find_prog prog =
-      let rec search = function
-        | [] -> None
-        | x :: xs ->
-            let prog = Filename.concat x prog in
-            if Sys.file_exists prog then Some prog else search xs
-      in
-      search path
-    in
-
-    match find_prog "docker" with
-    | None -> failwith "Failed to find docker executable in PATH"
-    | Some prog ->
-        Spawn.spawn ~prog ~argv:args ~stdin:Unix.stdin ~stdout:Unix.stdout
-          ~stderr:Unix.stderr ()
+    Unix.create_process "docker" args Unix.stdin Unix.stdout Unix.stderr
 
   let init () =
     let cwd = Unix.getcwd () in
@@ -72,7 +51,7 @@ module Autobahn = struct
     in
     let reports_volume = Filename.concat cwd "/_build/reports:/reports" in
     let args =
-      [
+      [|
         "docker";
         "run";
         "--rm";
@@ -89,7 +68,7 @@ module Autobahn = struct
         "fuzzingclient";
         "-w";
         "ws://0.0.0.0:2112";
-      ]
+      |]
     in
 
     let _ = spawn_docker args in

@@ -1,4 +1,4 @@
 (executable
  (public_name server)
  (name server)
- (libraries nomad riot trail spawn))
+ (libraries nomad riot trail))
