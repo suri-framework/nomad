@@ -38,73 +38,67 @@ module Test : Riot.Application.Intf = struct
     Nomad.start_link ~port:2112 ~handler ()
 end
 
-
 module Autobahn = struct
+  let spawn_docker args =
+    let path =
+      match Sys.getenv_opt "PATH" with
+      | None -> []
+      | exception Not_found -> []
+      | Some s -> String.split_on_char ':' s
+    in
 
-    let spawn_docker args =
-        let path =
-          match Sys.getenv_opt "PATH" with
-          | None -> []
-          | exception Not_found -> []
-          | Some s -> String.split_on_char ':' s
-        in
+    let find_prog prog =
+      let rec search = function
+        | [] -> None
+        | x :: xs ->
+            let prog = Filename.concat x prog in
+            if Sys.file_exists prog then Some prog else search xs
+      in
+      search path
+    in
 
-        let find_prog prog =
-          let rec search = function
-            | [] -> None
-            | x :: xs ->
-                let prog = Filename.concat x prog in
-                if Sys.file_exists prog then Some prog else search xs
-          in
-          search path
-        in
+    match find_prog "docker" with
+    | None -> failwith "Failed to find docker executable in PATH"
+    | Some prog ->
+        Spawn.spawn ~prog ~argv:args ~stdin:Unix.stdin ~stdout:Unix.stdout
+          ~stderr:Unix.stderr ()
 
-        match find_prog "docker" with
-        | None -> failwith "Failed to find docker executable in PATH"
-        | Some prog ->
-            Spawn.spawn ~prog ~argv:args ~stdin:Unix.stdin ~stdout:Unix.stdout
-              ~stderr:Unix.stderr ()
+  let init () =
+    let cwd = Unix.getcwd () in
 
-    let init () = 
-
-        let cwd = Unix.getcwd() in
-
-        let config_volume =
-            Filename.concat cwd
+    let config_volume =
+      Filename.concat cwd
         "/test/autobahn/fuzzingclient.json:/fuzzingclient.json"
-        in
-        let reports_volume = Filename.concat cwd "/_build/reports:/reports" in
-        let args =
-            [
-                "docker";
-                "run";
-                "--rm";
-                "-v";
-                config_volume;
-                "-v";
-                reports_volume;
-                "--name";
-                "nomad";
-                "--net=host";
-                "crossbario/autobahn-testsuite";
-                "wstest";
-                "--mode";
-                "fuzzingclient";
-                "-w";
-                "ws://0.0.0.0:2112";
-            ]
-        in
+    in
+    let reports_volume = Filename.concat cwd "/_build/reports:/reports" in
+    let args =
+      [
+        "docker";
+        "run";
+        "--rm";
+        "-v";
+        config_volume;
+        "-v";
+        reports_volume;
+        "--name";
+        "nomad";
+        "--net=host";
+        "crossbario/autobahn-testsuite";
+        "wstest";
+        "--mode";
+        "fuzzingclient";
+        "-w";
+        "ws://0.0.0.0:2112";
+      ]
+    in
 
-        let _ = spawn_docker args in
+    let _ = spawn_docker args in
 
-        match receive () with
-        | _ -> failwith "Should have never received a message"
-
-
+    match receive () with _ -> failwith "Should have never received a message"
 
   let start () =
-      let pid = spawn init in
-      Ok pid
+    let pid = spawn init in
+    Ok pid
 end
 
 let () =
