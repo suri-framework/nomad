@@ -3,8 +3,8 @@
 docker run -it --rm \
     -v "${PWD}/test/autobahn/fuzzingclient.json:/fuzzingclient.json" \
     -v "${PWD}/_build/reports:/reports" \
-    -p 2113:2113 \
     --name nomad \
+    --network="host" \
     crossbario/autobahn-testsuite \
     wstest --mode fuzzingclient \
-      -w ws://host.docker.internal:2112
+      -w ws://0.0.0.0:2112
