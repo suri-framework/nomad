@@ -10,7 +10,7 @@ module Echo_server = struct
 
   let handle_frame frame _conn _state :
       (state, [> `Unknown_opcode of int ]) Trail.Sock.handle_result =
-    Riot.Logger.info (fun f -> f "handling frame: %a" Trail.Frame.pp frame);
+    Logger.info (fun f -> f "handling frame: %a" Trail.Frame.pp frame);
     `push ([ frame ], _state)
 
   (* val handle_message : *)
@@ -20,9 +20,8 @@ module Echo_server = struct
     `ok 2
 end
 
-module Test : Riot.Application.Intf = struct
+module Test : Application.Intf = struct
   let start () =
-    let open Riot in
     Logger.set_log_level (Some Debug);
     sleep 0.1;
     Logger.info (fun f -> f "starting nomad server");
@@ -81,4 +80,4 @@ module Autobahn = struct
 end
 
 let () =
-  Riot.start ~apps:[ (module Riot.Logger); (module Test); (module Autobahn) ] ()
+  Riot.start ~apps:[ (module Logger); (module Test); (module Autobahn) ] ()
