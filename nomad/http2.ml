@@ -12,7 +12,7 @@ module H2_stream = struct
   type Message.t += Frame of Frame.t
 
   let rec loop conn =
-    match receive () with
+    match receive_any () with
     | Frame frame ->
         Logger.debug (fun f -> f "frame: %a" Frame.pp frame);
         loop conn
